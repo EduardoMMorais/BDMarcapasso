@@ -8,4 +8,4 @@ O programa espera que exista um arquivo chamado `BDMarcapasso_01jun22.csv` no di
 
 A leitura e tratamento dos dados em `bdmarcapasso.py` é bastante simplista. Recomendo trabalhar nisso.
 
-As dependências desse projeto são o pacote [scikit-learn][https://scikit-learn.org/stable/index.html] e [python-graphviz][https://github.com/xflr6/graphviz] para salvar a árvore de decisão em PDF.
+As dependências desse projeto são o pacote [scikit-learn](https://scikit-learn.org/stable/index.html) e [python-graphviz](https://github.com/xflr6/graphviz) para salvar a árvore de decisão em PDF.
