@@ -1,0 +1,154 @@
+---
+title: "Correlations"
+author: "Eduardo Yuki Yada"
+output: 
+  pdf_document:
+    template: latex-template.tex
+params:
+  outcome_column: readmission_30d
+---
+
+# Imports
+
+```{r warning=F, message=F}
+library(tidyverse)
+library(yaml)
+library(kableExtra)
+library(ggcorrplot)
+```
+
+# Loading data
+
+```{r}
+df <- readRDS('../dataset/processed_data.rds') 
+df_names <- readRDS('../dataset/processed_dictionary.rds') 
+columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
+
+outcome_column <- params$outcome_column
+```
+
+# Functions
+
+```{r}
+niceFormatting = function(df, caption="", digits = 2){
+  df %>%
+    kbl(booktabs = T, longtable = T, caption = caption, digits = digits, format = "latex") %>%
+    kable_styling(latex_options = c("striped", "HOLD_position", "repeat_header"))
+}
+```
+
+# Correlation
+
+```{r}
+na_eligible_columns <- df %>% 
+  summarise(across(everything(), ~ mean(is.na(.)))) %>%
+  select_if(function(.) last(.) < 0.8) %>%
+  names
+
+unique_eligible_columns <- df %>% 
+  summarise(across(everything(), ~ length(unique(.)))) %>%
+  select_if(function(.) last(.) > 1) %>%
+  names
+
+weird_columns <- c('dieta_parenteral', 'dieta_enteral')
+
+eligible_columns <- intersect(na_eligible_columns,
+                             unique_eligible_columns)
+
+eligible_columns <- setdiff(eligible_columns, weird_columns)
+
+# df %>% group_by(dieta_enteral) %>% summarise(n = n())
+# df %>% group_by(dieta_parenteral) %>% summarise(n = n())
+
+corr <- df %>% 
+  select(all_of(intersect(columns_list$numerical_columns,
+                          eligible_columns))) %>%
+  drop_na %>%
+  cor %>%
+  as.matrix
+
+corr_table <- corr %>%
+  as.data.frame %>%
+  tibble::rownames_to_column(var = 'row') %>% 
+  tidyr::pivot_longer(-row, names_to = 'column', values_to = 'correlation') %>%
+  filter(row != column)
+
+rename_column <- function(df, column_name){
+  variable.name <- 'variable.name'
+  df <- df %>%
+    left_join(df_names %>% select(variable.name, abbrev.field.label),
+              by = setNames(variable.name, column_name)) %>%
+    select(-all_of(column_name)) %>%
+    rename(!!sym(column_name) := abbrev.field.label) %>%
+    relocate(!!sym(column_name))
+}
+
+corr_table %>%  
+  filter(correlation > 0.8) %>%
+  rename_column('row') %>%
+  rename_column('column') %>%
+  select(row, column, correlation) %>%
+  niceFormatting(caption = "Pearson Correlation")
+```
+
+# Hypothesis Tests
+
+```{r}
+df_wilcox <- tibble()
+
+for (variable in columns_list$numerical_columns){
+  if (mean(is.na(df[[variable]])) > 0.95) next
+  
+  x <- filter(df, !!sym(outcome_column) == 0)[[variable]]
+  y <- filter(df, !!sym(outcome_column) == 1)[[variable]]
+  
+  test = wilcox.test(x, y, alternative = "two.sided", exact = FALSE)
+  
+  df_wilcox = bind_rows(df_wilcox,
+                        list("Variable" = variable, 
+                             "Statistic" = test$statistic,
+                             "p-value" = test$p.value))
+}
+
+df_wilcox <- df_wilcox %>%
+  arrange(`p-value`) %>%
+  mutate(`Statistic`  = round(`Statistic`, 3)) %>%
+  rename_column('Variable')
+
+significant_numerical_columns <- df_wilcox %>%
+  filter(`p-value` <= 0.25) %>%
+  select(Variable) %>%
+  pull
+
+df_wilcox %>%
+  mutate(`p-value` = case_when(`p-value` == 1 ~ sprintf('> 0%s999', getOption("OutDec")), 
+                               `p-value` < 0.001 ~ sprintf('< 0%s001', getOption("OutDec")), 
+                               TRUE ~ as.character(round(`p-value`, 3)))) %>%
+  niceFormatting(caption = "Mann-Whitney Test")
+```
+
+```{r}
+df_chisq <- tibble()
+
+for (variable in columns_list$categorical_columns){
+  if (length(unique(df[[variable]])) > 1){
+    test <- chisq.test(df[[outcome_column]], 
+                       df[[variable]] %>% replace_na('NA'), # counting NA as cat
+                       simulate.p.value = TRUE)
+    
+    df_chisq <- bind_rows(df_chisq,
+                         list("Variable" = variable,
+                              "Statistic" = test$statistic, 
+                              "p-value" = test$p.value))
+  }
+}
+
+df_chisq %>%
+  arrange(`p-value`) %>%
+  mutate(`p-value` = case_when(`p-value` == 1 ~ sprintf('> 0%s999', getOption("OutDec")), 
+                               `p-value` < 0.001 ~ sprintf('< 0%s001', getOption("OutDec")), 
+                               TRUE ~ as.character(round(`p-value`, 3))),
+         `Statistic`  = round(`Statistic`, 3)) %>%
+  rename_column('Variable') %>%
+  niceFormatting(caption = "Chi-squared test")
+```
