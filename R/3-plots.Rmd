@@ -1,0 +1,42 @@
+---
+title: "Plots"
+author: "Eduardo Yuki Yada"
+output: 
+  pdf_document:
+    template: latex-template.tex
+params:
+  outcome_column: readmission_30d
+---
+
+# Imports
+
+```{r warning=F, message=F}
+library(tidyverse)
+library(yaml)
+```
+
+# Loading data
+
+```{r}
+df <- readRDS('../dataset/processed_data.rds') 
+df_names <- readRDS('../dataset/processed_dictionary.rds') 
+columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
+
+outcome_column <- params$outcome_column
+```
+
+```{r warning=F, fig.show="hold", out.width="50%", fig.height = 5}
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
+
+for (column in columns_list$numerical_columns){
+  if (mean(is.na(df[[column]])) > 0.95) next
+  
+  df %>%
+    ggplot(aes_string(x = outcome_column, y = column)) + 
+      geom_boxplot(outlier.alpha = 0.1) + 
+      theme_grey() -> p
+      
+  print(p)
+}
+```
+
