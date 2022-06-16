@@ -19,11 +19,19 @@ library(kableExtra)
 # Loading data
 
 ```{r}
-df <- readRDS('../dataset/processed_data.rds') 
-df_names <- readRDS('../dataset/processed_dictionary.rds') 
+# df <- readRDS('../dataset/processed_data.rds') 
+# df_names <- readRDS('../dataset/processed_dictionary.rds') 
+
+load('../dataset/processed_data.RData') 
+load('../dataset/processed_dictionary.RData') 
+
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_column <- params$outcome_column
+
+df %>%
+  select(date_procedure_1, date_procedure_2) %>%
+  filter(date_procedure_2 < date_procedure_1)
 ```
 
 # Numerical variables
