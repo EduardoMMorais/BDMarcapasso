@@ -50,9 +50,12 @@ df_names <- df_names %>%
 # Separating columns by type
 
 ```{r}
+outcome_columns <- df_names %>% filter(...6 == 'Desfecho de interesse') %>% .$variable.name
+
 categorical_columns <- df_names %>%
   filter(stringr::str_detect(options..definition, '\\|')) %>%
-  .$variable.name
+  .$variable.name %>%
+  setdiff(outcome_columns)
 
 date_columns <- df_names %>%
   filter(options..definition == 'data') %>%
@@ -66,7 +69,10 @@ numerical_columns <- setdiff(names(df),
                              c(categorical_columns, date_columns, 
                                location_columns, other_columns))
 
-outcome_columns <- df_names %>% filter(...6 == 'Desfecho de interesse') %>% .$variable.name
+df[columns_list$categorical_columns] <- lapply(df[columns_list$categorical_columns],
+                                               as.character)
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns],
+                                               as.numeric)
 
 columns_list <- list('categorical_columns' = categorical_columns,
                      'numerical_columns' = numerical_columns,
@@ -91,6 +97,9 @@ df <- df %>%
 # Saving processed data
 
 ```{r}
-saveRDS(df, "../data/processed_data.rds")
-saveRDS(df_names, "../data/processed_dictionary.rds")
+saveRDS(df, "../dataset/processed_data.rds")
+saveRDS(df_names, "../dataset/processed_dictionary.rds")
+
+save(df, file = "../dataset/processed_data.RData")
+save(df_names, file = "../dataset/processed_dictionary.RData")
 ```
