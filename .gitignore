@@ -3,5 +3,6 @@ __pycache__/
 Marcapasso_DecisionTree*
 *.xlsx
 *.rdata
+*.RData
 *.rds
 R/.Rhistory

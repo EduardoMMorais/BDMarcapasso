@@ -5,7 +5,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: readmission_30d
+  outcome_column: death_hospitalar
 ---
 
 # Imports
@@ -106,7 +106,12 @@ for (variable in columns_list$numerical_columns){
   x <- filter(df, !!sym(outcome_column) == 0)[[variable]]
   y <- filter(df, !!sym(outcome_column) == 1)[[variable]]
   
-  test = wilcox.test(x, y, alternative = "two.sided", exact = FALSE)
+  test = tryCatch(wilcox.test(x, y, alternative = "two.sided", exact = FALSE), 
+                  error=function(cond) {
+                    message("Can't calculate Wilcox test for variable ", variable)
+                    message(cond)
+                    return(list(statistic = NaN, p.value = 1))
+                  })
   
   df_wilcox = bind_rows(df_wilcox,
                         list("Variable" = variable, 
