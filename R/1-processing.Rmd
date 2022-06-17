@@ -2,6 +2,7 @@
 title: "Processing"
 author: "Eduardo Yuki Yada"
 date: "`r Sys.Date()`"
+geometry: margin=1cm
 output: 
   pdf_document:
     template: latex-template.tex

@@ -1,6 +1,7 @@
 ---
 title: "Plots"
 author: "Eduardo Yuki Yada"
+geometry: margin=1cm
 output: 
   pdf_document:
     template: latex-template.tex
