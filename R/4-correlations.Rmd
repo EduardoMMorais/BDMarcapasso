@@ -110,7 +110,7 @@ for (variable in columns_list$numerical_columns){
                   error=function(cond) {
                     message("Can't calculate Wilcox test for variable ", variable)
                     message(cond)
-                    return(list(statistic = NaN, p.value = 1))
+                    return(list(statistic = NaN, p.value = NaN))
                   })
   
   df_wilcox = bind_rows(df_wilcox,
@@ -141,10 +141,15 @@ df_chisq <- tibble()
 
 for (variable in columns_list$categorical_columns){
   if (length(unique(df[[variable]])) > 1){
-    test <- chisq.test(df[[outcome_column]], 
+    test <- tryCatch(chisq.test(df[[outcome_column]], 
                        df[[variable]] %>% replace_na('NA'), # counting NA as cat
-                       simulate.p.value = TRUE)
-    
+                       simulate.p.value = TRUE),
+                     error = function (cond) {
+                       message("Can't calculate Chi Squared test for variable ", variable)
+                       message(cond)
+                       return(list(statistic = NaN, p.value = NaN))
+                     })
+
     df_chisq <- bind_rows(df_chisq,
                          list("Variable" = variable,
                               "Statistic" = test$statistic, 
