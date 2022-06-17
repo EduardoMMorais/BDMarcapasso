@@ -6,7 +6,7 @@ rmarkdown::render('1-processing.Rmd',
 
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
-for(outcome_column in columns_list$outcome_columns[1]){
+for(outcome_column in columns_list$outcome_columns){
   dir.create(file.path(paste0('./results/', outcome_column)),
              showWarnings = FALSE)
   
