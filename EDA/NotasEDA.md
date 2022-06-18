@@ -11,11 +11,11 @@ Aqui documentamos algumas dúvidas sobre como os dados estão organizados:
 - Ao contrário dos desfechos de readmissão, a divisão dos desfechos de morte não está muito clara. Por exemplo, um valor "death_hospitalar" não implica "death", mas todos os demais (death_intraop, death_readmission, death_30days, etc.) implicam. Em alguns casos, "death_readmission" é acompanhado por um desfecho específico de data (por exemplo "death_30days", "death_1year", etc.) e em outros casos, não  (para exemplos, veja os resgistros 33, 131, entre outros).
   Isso é uma possível fonte de divergência entre a análise dos desfechos de readmissão e morte. Os desfechos de readmissão foram agrupados, como pode ser visto no documento `1-processing.pdf`, mas nenhum agrupamento foi feito nos desfechos de morte
 
-- "Dieta enteral" e "Dieta parenteral" ...
+- As variáveis "Dieta enteral" e "Dieta parenteral" possuem pouca variação. Apenas 0,01% dos indivíduos possuem valores diferentes de zero.   
 
 Conclusões das métricas
 ------------------------
-- Existe uma correlação fraca entre o ano da operação e a readimissão, indicando que readmissões eram mais comuns no passado do que atualmente. É possível que isso seja um artefato da falta de dados? Por exemplo, ainda não deu tempo do paciente recente ser readmitido? (no caso de mortes essa relação é bem mais acentuada. Não parece ser um artefato)
+- Existe uma correlação fraca entre o ano da operação e a readmissão, indicando que readmissões eram mais comuns no passado do que atualmente. É possível que isso seja um artefato da falta de dados? Por exemplo, ainda não deu tempo do paciente recente ser readmitido? (no caso de mortes essa relação é bem mais acentuada. Não parece ser um artefato)
 
 - O campo "Tempo entre o P1 e P2" ("time_p1p2") é um ótimo preditor de readmissão, inclusive tendo sido selecionado pelos modelos de ML treinados. Porém em muitos casos ele pode ser uma "trapaça", revelando indiretamente o resultado (ainda mais considerando que o valor mediano para o número da admissão T0 é 1). Deve ser tratado com cuidado.
 
