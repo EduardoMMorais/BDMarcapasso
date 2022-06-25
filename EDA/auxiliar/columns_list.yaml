@@ -69,8 +69,11 @@ categorical_columns:
 - icu_post_t0
 - dialysis_post_t0
 - disch_outcomes_t0
+- readmission_cir_30d
+- readmission_cir_60d
+- readmission_cir_180d
+- readmission_cir_1year
 - final_outcome
-- death_intraop
 - death_cause
 - ventilacao_mecanica
 numerical_columns:
@@ -115,7 +118,13 @@ numerical_columns:
 - readmission_60d
 - readmission_180d
 - readmission_1year
+- n_procedure_t0
+- n_procedure_30d
+- n_procedure_60d
+- n_procedure_180d
+- n_procedure_1year
 - survival_time_overall
+- death_intraop
 - death_hospitalar
 - death_readmission
 - death_30days
@@ -153,6 +162,9 @@ numerical_columns:
 - antiviral
 - antiretroviral
 - classe_meds_qtde
+- classe_meds_cardio_qtde
+- meds_cardiovasc_qtde
+- meds_antimicrobianos
 - vni
 - cec
 - cir_cardiovascular
@@ -231,6 +243,7 @@ outcome_columns:
 - readmission_60d
 - readmission_180d
 - readmission_1year
+- death_intraop
 - death_hospitalar
 - death_readmission
 - death_30days

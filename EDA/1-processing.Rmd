@@ -19,8 +19,8 @@ library(yaml)
 # Loading files
 
 ```{r warning=F, message=F}
-df <- read_excel("../dataset/BD Marcapasso_09jun22.xlsx") %>% select(-record_id)
-df_names <- read_excel("../dataset/Dicionario_dados_BD Marcapasso_09jun22.xlsx")
+df <- read_excel("../dataset/BD Marcapasso_23jun22.xlsx") %>% select(-record_id)
+df_names <- read_excel("../dataset/Dicionario_dados_BD Marcapasso_23jun22.xlsx")
 ```
 
 # Fixing data dictionary
@@ -32,13 +32,16 @@ df_names <- df_names %>%
   mutate(variable.name = case_when(variable.name == 'icu_days_t0' ~ 'icu_t0', 
                                    variable.name == 'dialysis_days_t0' ~ 'dialysis_t0', 
                                    TRUE ~ variable.name),  # mismatch with dataset column name
+         variable.name = str_replace(variable.name, "\\[", ""),
+         variable.name = str_replace(variable.name, "\\]", ""),
          field.label = str_replace(field.label, "_", " "), # add spaces
          field.label = str_replace_all(field.label, "[\r\n]" , ""),
          abbrev.field.label = str_replace(field.label, " \\s*\\([^\\)]+\\)", ""),
          abbrev.field.label = if_else(variable.name %in% c('admission_posop_count',
                                                            'admission_pre_t0_count'),
                                       str_replace(field.label, "de episódios", ""),
-                                      abbrev.field.label))
+                                      abbrev.field.label)) %>%
+  rename(momento.aquisicao = momento.da.aquisição.do.dado..admissão.t0.ou.pós.t0.)
 
 # df_names %>% filter(variable.name %in% date_columns)
 # 
@@ -51,7 +54,9 @@ df_names <- df_names %>%
 # Separating columns by type
 
 ```{r}
-outcome_columns <- df_names %>% filter(...6 == 'Desfecho de interesse') %>% .$variable.name
+outcome_columns <- df_names %>% 
+  filter(str_detect(momento.aquisicao, 'Desfecho')) %>% 
+  .$variable.name
 
 categorical_columns <- df_names %>%
   filter(stringr::str_detect(options..definition, '\\|')) %>%
@@ -70,10 +75,10 @@ numerical_columns <- setdiff(names(df),
                              c(categorical_columns, date_columns, 
                                location_columns, other_columns))
 
-df[columns_list$categorical_columns] <- lapply(df[columns_list$categorical_columns],
-                                               as.character)
-df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns],
-                                               as.numeric)
+df[categorical_columns] <- lapply(df[categorical_columns],
+                                  as.character)
+df[outcome_columns] <- lapply(df[outcome_columns],
+                              as.numeric)
 
 columns_list <- list('categorical_columns' = categorical_columns,
                      'numerical_columns' = numerical_columns,
