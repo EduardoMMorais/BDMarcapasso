@@ -6,3 +6,4 @@ Marcapasso_DecisionTree*
 *.RData
 *.rds
 EDA/.Rhistory
+*.csv
