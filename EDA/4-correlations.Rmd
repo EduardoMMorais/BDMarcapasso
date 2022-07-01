@@ -32,10 +32,11 @@ outcome_column <- params$outcome_column
 # Functions
 
 ```{r}
-niceFormatting = function(df, caption="", digits = 2){
+niceFormatting = function(df, caption="", digits = 2, font_size = NULL){
   df %>%
     kbl(booktabs = T, longtable = T, caption = caption, digits = digits, format = "latex") %>%
-    kable_styling(latex_options = c("striped", "HOLD_position", "repeat_header"))
+    kable_styling(font_size = font_size,
+                  latex_options = c("striped", "HOLD_position", "repeat_header"))
 }
 ```
 
@@ -90,7 +91,7 @@ corr_table %>%
   rename_column('row') %>%
   rename_column('column') %>%
   select(row, column, correlation) %>%
-  niceFormatting(caption = "Pearson Correlation")
+  niceFormatting(caption = "Pearson Correlation", font_size = 9)
 ```
 
 # Hypothesis Tests
@@ -164,3 +165,30 @@ df_chisq %>%
   rename_column('Variable') %>%
   niceFormatting(caption = "Chi-squared test")
 ```
+
+```{r echo=F, eval=F}
+variable = 'sex'
+outcome_column = 'readmission_30d'
+chisq.test(df[[outcome_column]], 
+           df[[variable]] %>% replace_na('NA'), # counting NA as cat
+           simulate.p.value = TRUE)
+
+variable = 'sex'
+outcome_column = 'readmission_60d'
+chisq.test(df[[outcome_column]], 
+           df[[variable]] %>% replace_na('NA'), # counting NA as cat
+           simulate.p.value = TRUE)
+
+variable = 'sex'
+outcome_column = 'readmission_180d'
+chisq.test(df[[outcome_column]], 
+           df[[variable]] %>% replace_na('NA'), # counting NA as cat
+           simulate.p.value = TRUE)
+
+variable = 'sex'
+outcome_column = 'readmission_1year'
+chisq.test(df[[outcome_column]], 
+           df[[variable]] %>% replace_na('NA'), # counting NA as cat
+           simulate.p.value = TRUE)
+```
+

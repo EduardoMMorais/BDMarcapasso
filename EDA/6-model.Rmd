@@ -14,6 +14,8 @@ params:
 ```{r warning=F, message=F}
 library(tidyverse)
 library(yaml)
+library(tidymodels)
+library(usemodels) 
 ```
 
 # Loading data
@@ -31,7 +33,9 @@ outcome_column <- params$outcome_column
 
 ```{r}
 df = df %>%
-  filter(death_hospitalar == 0)
+  filter(disch_outcomes_t0 == 0)
+
+df %>% dim
 ```
 
 # Choosing features
@@ -41,95 +45,147 @@ eligible_columns = df_names %>%
   filter(momento.aquisicao == 'Admissão t0') %>%
   .$variable.name
 
+exception_columns = c('disch_outcomes_t0')
+
 features = eligible_columns %>%
-  base::intersect(c(columns_list$categorical_columns, columns_list$numerical_columns))
+  base::intersect(c(columns_list$categorical_columns, columns_list$numerical_columns)) %>%
+  setdiff(exception_columns)
+
+length(features)
 ```
 
 # Train test split
 
 ```{r}
-smp_size <- 0.5 * dim(df)[1]
 set.seed(42)
 
 df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
 
-train_ind <- base::sample(seq_len(nrow(df)), size = smp_size)
-df_train <- df[train_ind, ] %>% dplyr::select(all_of(c(features, outcome_column)))
-df_test <- df[-train_ind, ] %>% dplyr::select(all_of(c(features, outcome_column)))
+df_split <- initial_split(df %>% dplyr::select(all_of(c(features, outcome_column))),
+                          prop = .7, strata = outcome_column)
+df_train <- training(df_split)
+df_test <- testing(df_split)
+
+dim(df_train)[1] / dim(df)[1]
+dim(df_test)[1] / dim(df)[1]
 ```
 
-# Model
+# Functions
 
 ```{r}
-library(tidymodels)
-library(usemodels) 
+validation = function(model_fit, new_data) {
+  library(pROC)
+  library(caret)
+  
+  test_predictions_prob <-
+    predict(model_fit, new_data = new_data, type = "prob") %>%
+    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
+    .$`1`
+  
+  pROC_obj <- roc(
+    new_data[[outcome_column]],
+    test_predictions_prob,
+    smoothed = TRUE,
+    # arguments for ci
+    ci = TRUE,
+    ci.alpha = 0.9,
+    stratified = FALSE,
+    # arguments for plot
+    plot = TRUE,
+    auc.polygon = TRUE,
+    max.auc.polygon = TRUE,
+    grid = TRUE,
+    print.auc = TRUE,
+    show.thres = TRUE
+  )
+  
+  sens.ci <- ci.se(pROC_obj)
+  plot(sens.ci, type = "shape", col = "lightblue")
+  plot(sens.ci, type = "bars")
+  
+  test_predictions_class <-
+    predict(model_fit, new_data = new_data, type = "class") %>%
+    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
+    .$class
+  
+  conf_matrix = table(test_predictions_class, new_data[[outcome_column]])
+  
+  confusionMatrix(conf_matrix)
+}
+```
 
+# XGBoost
+
+```{r}
 use_xgboost(sprintf('%s ~ .', outcome_column) %>% as.formula,
             data = df_train)
 ```
 
 ```{r}
 xgboost_recipe <- 
-  recipe(formula = sprintf('%s ~ .', outcome_column) %>% as.formula,
-         data = df_train) %>% 
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
   step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
     "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
     "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
     "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
     "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
     "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", 
-    "icu_t0", "dialysis_t0", "icu_post_t0", "disch_outcomes_t0", 
-    "ventilacao_mecanica")) %>% 
+    "icu_post_t0", "ventilacao_mecanica")) %>% 
   step_novel(all_nominal_predictors()) %>% 
   step_dummy(all_nominal_predictors(), one_hot = TRUE) %>% 
   step_zv(all_predictors()) 
 
 xgboost_spec <- 
-  boost_tree(trees = 100) %>% 
+  boost_tree(trees = 300) %>% 
   set_mode("classification") %>% 
   set_engine("xgboost") 
 
-xgboost_workflow <- 
-  workflow() %>% 
-  add_recipe(xgboost_recipe) %>% 
+xgboost_workflow <-
+  workflow() %>%
+  add_recipe(xgboost_recipe) %>%
   add_model(xgboost_spec) 
-```
 
-```{r}
 xgb_fit <- xgboost_workflow %>% 
   fit(df_train)
+
+validation(xgb_fit, df_test)
 ```
+
+# GLM
+
 ```{r}
-library(pROC)
-
-test_predictions_prob <- predict(xgb_fit, new_data = df_test, type = "prob") %>% 
-  rename_at(vars(starts_with(".pred_")), ~str_remove(., ".pred_")) %>%
-  .$`1`
-
-pROC_obj <- roc(df_test[[outcome_column]], test_predictions_prob,
-            smoothed = TRUE,
-            # arguments for ci
-            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
-            # arguments for plot
-            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
-            print.auc=TRUE, show.thres=TRUE)
-
-sens.ci <- ci.se(pROC_obj)
-plot(sens.ci, type="shape", col="lightblue")
-## Warning in plot.ci.se(sens.ci, type = "shape", col = "lightblue"): Low
-## definition shape.
-plot(sens.ci, type="bars")
+use_glmnet(sprintf('%s ~ .', outcome_column) %>% as.formula,
+           data = df_train)
 ```
 
 ```{r}
-library(caret)
+glmnet_recipe <- 
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
+  step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
+    "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
+    "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
+    "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
+    "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
+    "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", 
+    "icu_post_t0", "ventilacao_mecanica")) %>% 
+  step_novel(all_nominal_predictors()) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_numeric_predictors()) 
 
-test_predictions_class <- predict(xgb_fit, new_data = df_test, type = "class") %>% 
-  rename_at(vars(starts_with(".pred_")), ~str_remove(., ".pred_")) %>%
-  .$class
+glmnet_spec <- 
+  logistic_reg(penalty = 0) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet") 
 
-conf_matrix = table(test_predictions_class, df_test[[outcome_column]])
+glmnet_workflow <- 
+  workflow() %>% 
+  add_recipe(glmnet_recipe) %>% 
+  add_model(glmnet_spec) 
 
-confusionMatrix(conf_matrix)
+glm_fit <- glmnet_workflow %>% 
+  fit(df_train)
+
+validation(glm_fit, df_test)
 ```
 

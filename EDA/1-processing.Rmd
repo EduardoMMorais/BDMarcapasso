@@ -44,13 +44,6 @@ df_names <- df_names %>%
                                       str_replace(field.label, "de episódios", ""),
                                       abbrev.field.label)) %>%
   rename(momento.aquisicao = momento.da.aquisição.do.dado..admissão.t0.ou.pós.t0.)
-
-# df_names %>% filter(variable.name %in% date_columns)
-# 
-# mean(is.na(df$date_procedure_1))
-# mean(is.na(df$date_admission_t0))
-# 
-# (df$date_procedure_1 - df$date_admission_t0) / (60 * 60 * 24)
 ```
 
 # Separating columns by type

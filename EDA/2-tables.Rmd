@@ -36,7 +36,6 @@ medianWithoutNA <- function(x) {
 }
 i = 0
 for (column in columns_list$numerical_columns[60:140]){
-  print(column)
   df %>%
     group_by_at(vars(one_of(outcome_column))) %>%
     summarise('Mean' = mean(!!sym(column), na.rm = T),

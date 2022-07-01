@@ -68,7 +68,7 @@ for (column in setdiff(columns_list$numerical_columns, columns_list$outcome_colu
 ```
 
 ```{r warning=F, message=F, fig.show="hold", out.width="50%", fig.height = 5}
-column = 'death_intraop_2'
+column <- 'death_intraop_2'
 
 df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
 
@@ -108,7 +108,7 @@ df %>%
   .$aco %>% 
   max(na.rm=T)
 
-column = 'aco'
+column <- 'aco'
 df %>%
     mutate(rounded_date_admission_t0 = lubridate::floor_date(date_admission_t0, 
                                                              'month')) %>%
