@@ -53,15 +53,17 @@ unique_eligible_columns <- df %>%
   select_if(function(.) last(.) > 1) %>%
   names
 
+pre_columns = df_names %>%
+  filter(momento.aquisicao == 'Admissão t0') %>%
+  .$variable.name
+
 weird_columns <- c('dieta_parenteral', 'dieta_enteral')
 
 eligible_columns <- intersect(na_eligible_columns,
-                             unique_eligible_columns)
+                              unique_eligible_columns) %>%
+  intersect(pre_columns)
 
 eligible_columns <- setdiff(eligible_columns, weird_columns)
-
-# df %>% group_by(dieta_enteral) %>% summarise(n = n())
-# df %>% group_by(dieta_parenteral) %>% summarise(n = n())
 
 corr <- df %>% 
   select(all_of(intersect(columns_list$numerical_columns,
@@ -74,7 +76,7 @@ corr_table <- corr %>%
   as.data.frame %>%
   tibble::rownames_to_column(var = 'row') %>% 
   tidyr::pivot_longer(-row, names_to = 'column', values_to = 'correlation') %>%
-  filter(row != column)
+  filter(row < column)
 
 rename_column <- function(df, column_name){
   variable.name <- 'variable.name'
@@ -87,7 +89,7 @@ rename_column <- function(df, column_name){
 }
 
 corr_table %>%  
-  filter(correlation > 0.8) %>%
+  filter(correlation > 0.9) %>%
   rename_column('row') %>%
   rename_column('column') %>%
   select(row, column, correlation) %>%

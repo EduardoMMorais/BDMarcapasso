@@ -6,7 +6,7 @@ rmarkdown::render('1-processing.Rmd',
 
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
-for(outcome_column in columns_list$outcome_columns){
+for(outcome_column in columns_list$outcome_columns[1]){
   dir.create(file.path(paste0('./results/', outcome_column)),
              showWarnings = FALSE)
 
@@ -23,6 +23,12 @@ for(outcome_column in columns_list$outcome_columns){
   rmarkdown::render('4-correlations.Rmd',
                     params = list(outcome_column = outcome_column),
                     output_file = paste0('./results/', outcome_column, '/4-correlations.pdf'),
+                    clean=TRUE)
+  
+  
+  rmarkdown::render('6-model.Rmd',
+                    params = list(outcome_column = outcome_column),
+                    output_file = paste0('./results/', outcome_column, '/6-model.pdf'),
                     clean=TRUE)
 }
 
