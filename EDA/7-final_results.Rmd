@@ -1,0 +1,57 @@
+---
+title: "Final Results"
+author: "Eduardo Yuki Yada"
+geometry: margin=1cm
+output: 
+  pdf_document:
+    template: latex-template.tex
+params:
+  outcome_column: readmission_30d
+---
+
+```{r warning=F, message=F}
+library(tidyverse)
+library(kableExtra)
+```
+
+```{r}
+niceFormatting = function(df, caption="", digits = 2, font_size = NULL){
+  df %>%
+    kbl(booktabs = T, longtable = T, caption = caption, digits = digits, format = "latex") %>%
+    kable_styling(font_size = font_size,
+                  latex_options = c("striped", "HOLD_position", "repeat_header"))
+}
+```
+
+
+```{r}
+path <- "../EDA/auxiliar/performance"
+
+df <- tibble()
+
+for (file in list.files(path)){
+  df <- df %>% bind_rows(readRDS(file.path(path, file))) 
+}
+
+df <- df %>%
+  mutate(Target = factor(Target, levels = c('readmission_30d',
+                                            'readmission_60d',
+                                            'readmission_180d',
+                                            'readmission_1year')))
+
+df %>%
+  ggplot(aes(x = Target, y = AUC, ymin = `Lower Limit`,
+             ymax = `Upper Limit`, color = Model)) + 
+    geom_point(position = position_dodge(width=0.9)) + 
+    geom_errorbar(position = position_dodge(width=0.9))
+
+df %>%
+  ggplot(aes(x = Target, y = AUC, ymin = `Lower Limit`,
+             ymax = `Upper Limit`, group = Model, colour = Model)) + 
+    geom_line() 
+
+df %>%
+  niceFormatting()
+```
+
+
