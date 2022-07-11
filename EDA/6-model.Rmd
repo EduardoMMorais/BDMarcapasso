@@ -9,6 +9,12 @@ params:
   outcome_column: readmission_30d
 ---
 
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  warning = F
+)
+```
+
 # Imports
 
 ```{r warning=F, message=F}
@@ -192,7 +198,7 @@ xgboost_grid <- grid_latin_hypercube(
 )
 
 set.seed(234)
-df_folds <- vfold_cv(df_train, v = 5, strata = outcome_column)
+df_folds <- vfold_cv(df_train, v = 5, strata = all_of(outcome_column))
 
 xgboost_workflow <-
   workflow() %>%
@@ -307,7 +313,7 @@ tree_grid <- grid_regular(cost_complexity(),
                           levels = 10)
 
 set.seed(234)
-df_folds <- vfold_cv(df_train, v = 5, strata = outcome_column)
+df_folds <- vfold_cv(df_train, v = 5, strata = all_of(outcome_column))
 
 tree_workflow <- 
   workflow() %>% 
@@ -386,7 +392,7 @@ rf_grid <- grid_regular(mtry(range = c(1, 10)),
                         levels = 5)
 
 set.seed(234)
-df_folds <- vfold_cv(df_train, v = 5, strata = outcome_column)
+df_folds <- vfold_cv(df_train, v = 5, strata = all_of(outcome_column))
 
 rf_workflow <- 
   workflow() %>% 
@@ -443,6 +449,20 @@ rf_auc = validation(final_rf_fit, df_test)
 # Models Comparison
 
 ```{r}
+df_auc <- tibble::tribble(
+  ~Model, ~`AUC`, ~`Lower Limit`, ~`Upper Limit`,
+  'XGBoost', as.numeric(xgboost_auc$auc), xgboost_auc$ci[1], xgboost_auc$ci[3],
+  'GLM', as.numeric(glm_auc$auc), glm_auc$ci[1], glm_auc$ci[3],
+  'Decision Tree', as.numeric(tree_auc$auc), tree_auc$ci[1], tree_auc$ci[3],
+  'Random Forest', as.numeric(rf_auc$auc), rf_auc$ci[1], rf_auc$ci[3]
+) %>% 
+  mutate(Target = outcome_column)
 
+df_auc %>%
+  ggplot(aes(x = Model, y = AUC, ymin = `Lower Limit`, ymax = `Upper Limit`)) + 
+    geom_point() + 
+    geom_errorbar()
+
+saveRDS(df_auc, sprintf("../EDA/auxiliar/performance/%s_auc_result.RData", outcome_column))
 ```
 
