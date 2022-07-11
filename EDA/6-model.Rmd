@@ -143,7 +143,9 @@ validation = function(model_fit, new_data) {
   
   conf_matrix = table(test_predictions_class, new_data[[outcome_column]])
   
-  confusionMatrix(conf_matrix)
+  confusionMatrix(conf_matrix) %>% print
+  
+  return(pROC_obj)
 }
 ```
 
@@ -231,7 +233,7 @@ last_xgboost_fit <-
 
 final_xgboost_fit <- extract_workflow(last_xgboost_fit)
 
-validation(final_xgboost_fit, df_test)
+xgboost_auc = validation(final_xgboost_fit, df_test)
 
 final_xgboost_fit %>%
   fit(data = df_train) %>%
@@ -273,7 +275,11 @@ glmnet_workflow <-
 glm_fit <- glmnet_workflow %>% 
   fit(df_train)
 
-validation(glm_fit, df_test)
+# glm_fit %>%
+#   pull_workflow_fit() %>%
+#   tidy()
+
+glm_auc = validation(glm_fit, df_test)
 ```
 
 # Decision Tree
@@ -344,7 +350,7 @@ last_tree_fit <-
 
 final_tree_fit <- extract_workflow(last_tree_fit)
 
-validation(final_tree_fit, df_test)
+tree_auc = validation(final_tree_fit, df_test)
 
 final_tree_fit %>% 
   extract_fit_parsnip() %>% 
@@ -426,7 +432,7 @@ last_rf_fit <-
 
 final_rf_fit <- extract_workflow(last_rf_fit)
 
-validation(final_rf_fit, df_test)
+rf_auc = validation(final_rf_fit, df_test)
 
 # final_rf_fit %>% 
 #   extract_fit_parsnip() %>% 
