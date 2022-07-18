@@ -6,7 +6,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: death_hospitalar
+  outcome_column: death_30days
 ---
 
 # Imports

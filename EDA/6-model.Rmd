@@ -85,28 +85,14 @@ dim(df_train)[1] / dim(df)[1]
 dim(df_test)[1] / dim(df)[1]
 ```
 
-# Imputation
+# Global parameters
 
 ```{r}
-all_cores <- parallel::detectCores(logical = FALSE)
+k = 4 # Number of folds for cross validation
 
-library(doParallel)
-cl <- makePSOCKcluster(all_cores)
-registerDoParallel(cl)
-
-imputation_recipe <- recipe(sprintf("%s ~ .", outcome_column) %>% as.formula,
-                            data = df_train) %>%
-  step_zv(all_predictors()) %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_impute_mode(all_nominal_predictors()) %>%
-  step_impute_mean(all_numeric_predictors())
-  # step_impute_knn(all_predictors(), neighbors = 3)
-
-trained_imputation_recipe <- prep(imputation_recipe, 
-                                  training = df_train)
-
-df_train_imputed <- bake(trained_imputation_recipe, df_train)
-df_test_imputed <- bake(trained_imputation_recipe, df_test)
+set.seed(234)
+df_folds <- vfold_cv(df_train, v = k,
+                     strata = all_of(outcome_column))
 ```
 
 # Functions
@@ -155,7 +141,7 @@ validation = function(model_fit, new_data) {
 }
 ```
 
-# XGBoost
+# Boosted Tree (XGBoost)
 
 ```{r echo = F, results=F}
 use_xgboost(sprintf('%s ~ .', outcome_column) %>% as.formula,
@@ -196,9 +182,6 @@ xgboost_grid <- grid_latin_hypercube(
   learn_rate(),
   size = 30
 )
-
-set.seed(234)
-df_folds <- vfold_cv(df_train, v = 5, strata = all_of(outcome_column))
 
 xgboost_workflow <-
   workflow() %>%
@@ -312,9 +295,6 @@ tree_grid <- grid_regular(cost_complexity(),
                           tree_depth(),
                           levels = 10)
 
-set.seed(234)
-df_folds <- vfold_cv(df_train, v = 5, strata = all_of(outcome_column))
-
 tree_workflow <- 
   workflow() %>% 
   add_recipe(tree_recipe) %>% 
@@ -358,9 +338,11 @@ final_tree_fit <- extract_workflow(last_tree_fit)
 
 tree_auc = validation(final_tree_fit, df_test)
 
-final_tree_fit %>% 
-  extract_fit_parsnip() %>% 
-  vip()
+if (tree_auc$auc > 0.55){
+  final_tree_fit %>% 
+    extract_fit_parsnip() %>% 
+    vip() 
+}
 ```
 
 # Random Forest
@@ -390,9 +372,6 @@ rf_spec <-
 rf_grid <- grid_regular(mtry(range = c(1, 10)),
                         min_n(),
                         levels = 5)
-
-set.seed(234)
-df_folds <- vfold_cv(df_train, v = 5, strata = all_of(outcome_column))
 
 rf_workflow <- 
   workflow() %>% 
@@ -443,6 +422,129 @@ rf_auc = validation(final_rf_fit, df_test)
 # final_rf_fit %>% 
 #   extract_fit_parsnip() %>% 
 #   vip()
+```
+
+# KNN
+
+```{r}
+knn_recipe <- 
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
+  step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
+    "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
+    "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
+    "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
+    "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
+    "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", "ventilacao_mecanica")) %>% 
+  step_novel(all_nominal_predictors()) %>% 
+  step_zv(all_predictors()) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_impute_mode(all_nominal_predictors()) %>%
+  step_impute_mean(all_numeric_predictors())
+
+knn_spec <-
+  nearest_neighbor(neighbors = tune(),
+                   # weight_func = tune(),
+                   dist_power = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("kknn")
+
+knn_grid <- grid_regular(neighbors(),
+                         # weight_func(),
+                         dist_power(),
+                         levels = 2)
+
+knn_workflow <- 
+  workflow() %>% 
+  add_recipe(knn_recipe) %>% 
+  add_model(knn_spec) 
+
+knn_tune <- 
+  knn_workflow %>%
+  tune_grid(resamples = df_folds,
+            grid = knn_grid)
+
+knn_tune %>% 
+  collect_metrics()
+
+autoplot(knn_tune, metric = "roc_auc")
+
+knn_tune %>%
+  show_best("roc_auc")
+
+best_knn <- knn_tune %>%
+  select_best("roc_auc")
+
+final_knn_workflow <- 
+  knn_workflow %>% 
+  finalize_workflow(best_knn)
+
+last_knn_fit <- 
+  final_knn_workflow %>%
+  last_fit(df_split) 
+
+final_knn_fit <- extract_workflow(last_knn_fit)
+
+knn_auc = validation(final_knn_fit, df_test)
+```
+
+# SVM
+
+```{r}
+svm_recipe <- 
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
+  step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
+    "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
+    "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
+    "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
+    "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
+    "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", "ventilacao_mecanica")) %>% 
+  step_novel(all_nominal_predictors()) %>% 
+  step_zv(all_predictors()) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_impute_mode(all_nominal_predictors()) %>%
+  step_impute_mean(all_numeric_predictors())
+
+svm_spec <-
+  svm_rbf(cost = tune(), rbf_sigma = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_grid <- grid_regular(cost(),
+                         rbf_sigma(),
+                         levels = 2)
+
+svm_workflow <- 
+  workflow() %>% 
+  add_recipe(svm_recipe) %>% 
+  add_model(svm_spec) 
+
+svm_tune <- 
+  svm_workflow %>%
+  tune_grid(resamples = df_folds,
+            grid = svm_grid)
+
+svm_tune %>% 
+  collect_metrics()
+
+autoplot(svm_tune, metric = "roc_auc")
+
+svm_tune %>%
+  show_best("roc_auc")
+
+best_svm <- svm_tune %>%
+  select_best("roc_auc")
+
+final_svm_workflow <- 
+  svm_workflow %>% 
+  finalize_workflow(best_svm)
+
+last_svm_fit <- 
+  final_svm_workflow %>%
+  last_fit(df_split) 
+
+final_svm_fit <- extract_workflow(last_svm_fit)
+
+svm_auc = validation(final_svm_fit, df_test)
 ```
 
 

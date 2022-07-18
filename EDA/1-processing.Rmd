@@ -88,13 +88,34 @@ write_yaml(columns_list, con)
 close(con)
 ```
 
+# Filling missing values on death outcomes
+
+```{r}
+df <- df %>%
+  replace_na(list(death_30days = 0,
+                  death_180days = 0,
+                  death_1year = 0,
+                  death_2year = 0,
+                  death_3year = 0))
+
+df %>%
+  select(death_30days, death_180days, death_1year, death_2year, death_3year) %>%
+  mutate(death_sum = death_30days + death_180days + death_1year + death_2year + death_3year) %>%
+  .$death_sum %>%
+  unique
+```
+
 # Recalculating outcome columns for modeling
 
 ```{r}
 df <- df %>%
   mutate(readmission_1year = readmission_30d + readmission_60d + readmission_180d + readmission_1year,
          readmission_180d = readmission_30d + readmission_60d + readmission_180d,
-         readmission_60d = readmission_30d + readmission_60d)
+         readmission_60d = readmission_30d + readmission_60d,
+         death_3year = death_30days + death_180days + death_1year + death_2year + death_3year,
+         death_2year = death_30days + death_180days + death_1year + death_2year,
+         death_1year = death_30days + death_180days + death_1year,
+         death_180days = death_30days + death_180days)
 ```
 
 # Saving processed data

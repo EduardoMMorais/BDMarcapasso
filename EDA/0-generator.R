@@ -6,7 +6,10 @@ rmarkdown::render('1-processing.Rmd',
 
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
-for(outcome_column in columns_list$outcome_columns){
+outcome_columns = setdiff(columns_list$outcome_columns, 
+                          c('death_intraop', 'death_hospitalar', 'death_readmission', 'death'))
+
+for(outcome_column in outcome_columns){
   dir.create(file.path(paste0('./results/', outcome_column)),
              showWarnings = FALSE)
 
@@ -34,4 +37,8 @@ for(outcome_column in columns_list$outcome_columns){
 
 rmarkdown::render('5-distribution_shift.Rmd',
                   output_file = './results/5-distribution_shift.pdf',
+                  clean=TRUE)
+
+rmarkdown::render('7-final_results.Rmd',
+                  output_file = './results/7-final_results.pdf',
                   clean=TRUE)

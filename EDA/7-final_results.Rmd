@@ -29,29 +29,74 @@ path <- "../EDA/auxiliar/performance"
 
 df <- tibble()
 
-for (file in list.files(path)){
-  df <- df %>% bind_rows(readRDS(file.path(path, file))) 
+for (file in list.files(path)) {
+  df <- df %>% bind_rows(readRDS(file.path(path, file)))
 }
 
 df <- df %>%
-  mutate(Target = factor(Target, levels = c('readmission_30d',
-                                            'readmission_60d',
-                                            'readmission_180d',
-                                            'readmission_1year')))
+  mutate(Period = gsub(".*_", "", Target),
+         Target = gsub("_.*", "", Target) %>% str_to_title,
+         Period = factor(
+           Period,
+           levels = c(
+             '30d',
+             '30days',
+             '60d',
+             '180d',
+             '180days',
+             '1year',
+             '2year',
+             '3year'
+           ),
+           labels = c(
+             '30 days',
+             '30 days',
+             '60 days',
+             '180 days',
+             '180 days',
+             '1 year',
+             '2 years',
+             '3 years'
+           )
+         ))
 
 df %>%
-  ggplot(aes(x = Target, y = AUC, ymin = `Lower Limit`,
-             ymax = `Upper Limit`, color = Model)) + 
-    geom_point(position = position_dodge(width=0.9)) + 
-    geom_errorbar(position = position_dodge(width=0.9))
+  ggplot(aes(
+    x = Period,
+    y = AUC,
+    ymin = `Lower Limit`,
+    ymax = `Upper Limit`,
+    color = Model
+  )) +
+  facet_grid(~Target, scales = "free_x") + 
+  geom_point(position = position_dodge(width = 0.9)) +
+  geom_errorbar(position = position_dodge(width = 0.9)) +
+  theme(legend.position = "bottom")
 
 df %>%
-  ggplot(aes(x = Target, y = AUC, ymin = `Lower Limit`,
-             ymax = `Upper Limit`, group = Model, colour = Model)) + 
-    geom_line() 
+  ggplot(
+    aes(
+      x = Period,
+      y = AUC,
+      ymin = `Lower Limit`,
+      ymax = `Upper Limit`,
+      group = Model,
+      colour = Model
+    )
+  ) +
+  facet_grid(~Target, scales = "free_x") + 
+  geom_line() + 
+  theme(legend.position = "bottom")
 
 df %>%
-  niceFormatting()
+  filter(Target == 'Readmission') %>%
+  select(Period, Model, AUC, `Lower Limit`, `Upper Limit`) %>%
+  niceFormatting(caption = 'Readmission models comparison')
+
+df %>%
+  filter(Target == 'Death') %>%
+  select(Period, Model, AUC, `Lower Limit`, `Upper Limit`) %>%
+  niceFormatting(caption = 'Death models comparison')
 ```
 
 
