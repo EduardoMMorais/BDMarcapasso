@@ -20,9 +20,9 @@ library(lubridate)
 # Loading files
 
 ```{r warning=F, message=F}
-df <- read_csv("../dataset/BD Marcapasso_27jun22.csv", show_col_types = FALSE) %>% 
+df <- read_csv("../dataset/BD Marcapasso_11jul22.csv", show_col_types = FALSE) %>% 
   select(-record_id)
-df_names <- read_excel("../dataset/Dicionario_dados_BD Marcapasso_27jun22.xlsx")
+df_names <- read_excel("../dataset/Dicionario_dados_BD Marcapasso_11jul22.xlsx")
 ```
 
 # Fixing data dictionary
