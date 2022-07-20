@@ -7,6 +7,7 @@ output:
     template: latex-template.tex
 params:
   outcome_column: readmission_30d
+  threshold: 0.1
 ---
 
 # Imports
@@ -27,6 +28,7 @@ load('../dataset/processed_dictionary.RData')
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_column <- params$outcome_column
+threshold <- params$threshold
 ```
 
 # Functions
@@ -121,15 +123,15 @@ for (variable in intersect(columns_list$numerical_columns,
                              "p-value" = test$p.value))
 }
 
+significant_num_cols <- df_wilcox %>%
+  filter(`p-value` <= threshold) %>%
+  select(Variable) %>%
+  pull
+
 df_wilcox <- df_wilcox %>%
   arrange(`p-value`) %>%
   mutate(`Statistic`  = round(`Statistic`, 3)) %>%
   rename_column('Variable')
-
-significant_num_cols <- df_wilcox %>%
-  filter(`p-value` <= 0.3) %>%
-  select(Variable) %>%
-  pull
 
 df_wilcox %>%
   mutate(`p-value` = case_when(`p-value` == 1 ~ sprintf('> 0%s999', getOption("OutDec")), 
@@ -160,15 +162,15 @@ for (variable in intersect(columns_list$categorical_columns,
   }
 }
 
+significant_cat_cols <- df_chisq %>%
+  filter(`p-value` <= threshold) %>%
+  select(Variable) %>%
+  pull
+
 df_chisq <- df_chisq %>%
   arrange(`p-value`) %>%
   mutate(`Statistic`  = round(`Statistic`, 3)) %>%
   rename_column('Variable')
-
-significant_cat_cols <- df_chisq %>%
-  filter(`p-value` <= 0.3) %>%
-  select(Variable) %>%
-  pull
 
 df_chisq %>%
   mutate(`p-value` = case_when(`p-value` == 1 ~ sprintf('> 0%s999', getOption("OutDec")), 
@@ -211,7 +213,7 @@ saveRDS(significant_num_cols,
         file = sprintf("../EDA/auxiliar/significant_columns/numerical_%s.rds", outcome_column))
 ```
 
-```{r echo=F, eval=F}
+```{r echo=F, results==F}
 print(length(columns_list$categorical_columns))
 print(length(significant_cat_cols))
 print(length(columns_list$numerical_columns))
