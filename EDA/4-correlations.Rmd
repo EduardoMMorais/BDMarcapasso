@@ -6,7 +6,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: death_30days
+  outcome_column: readmission_30d
 ---
 
 # Imports
@@ -101,7 +101,8 @@ corr_table %>%
 ```{r}
 df_wilcox <- tibble()
 
-for (variable in columns_list$numerical_columns){
+for (variable in intersect(columns_list$numerical_columns,
+                           eligible_columns)){
   if (mean(is.na(df[[variable]])) > 0.95) next
   
   x <- filter(df, !!sym(outcome_column) == 0)[[variable]]
@@ -125,8 +126,8 @@ df_wilcox <- df_wilcox %>%
   mutate(`Statistic`  = round(`Statistic`, 3)) %>%
   rename_column('Variable')
 
-significant_numerical_columns <- df_wilcox %>%
-  filter(`p-value` <= 0.25) %>%
+significant_num_cols <- df_wilcox %>%
+  filter(`p-value` <= 0.3) %>%
   select(Variable) %>%
   pull
 
@@ -140,7 +141,8 @@ df_wilcox %>%
 ```{r}
 df_chisq <- tibble()
 
-for (variable in columns_list$categorical_columns){
+for (variable in intersect(columns_list$categorical_columns,
+                           eligible_columns)){
   if (length(unique(df[[variable]])) > 1){
     test <- tryCatch(chisq.test(df[[outcome_column]], 
                        df[[variable]] %>% replace_na('NA'), # counting NA as cat
@@ -158,13 +160,20 @@ for (variable in columns_list$categorical_columns){
   }
 }
 
-df_chisq %>%
+df_chisq <- df_chisq %>%
   arrange(`p-value`) %>%
+  mutate(`Statistic`  = round(`Statistic`, 3)) %>%
+  rename_column('Variable')
+
+significant_cat_cols <- df_chisq %>%
+  filter(`p-value` <= 0.3) %>%
+  select(Variable) %>%
+  pull
+
+df_chisq %>%
   mutate(`p-value` = case_when(`p-value` == 1 ~ sprintf('> 0%s999', getOption("OutDec")), 
                                `p-value` < 0.001 ~ sprintf('< 0%s001', getOption("OutDec")), 
-                               TRUE ~ as.character(round(`p-value`, 3))),
-         `Statistic`  = round(`Statistic`, 3)) %>%
-  rename_column('Variable') %>%
+                               TRUE ~ as.character(round(`p-value`, 3)))) %>%
   niceFormatting(caption = "Chi-squared test")
 ```
 
@@ -192,5 +201,20 @@ outcome_column = 'readmission_1year'
 chisq.test(df[[outcome_column]], 
            df[[variable]] %>% replace_na('NA'), # counting NA as cat
            simulate.p.value = TRUE)
+```
+
+```{r}
+saveRDS(significant_cat_cols,
+        file = sprintf("../EDA/auxiliar/significant_columns/categorical_%s.rds", outcome_column))
+
+saveRDS(significant_num_cols,
+        file = sprintf("../EDA/auxiliar/significant_columns/numerical_%s.rds", outcome_column))
+```
+
+```{r echo=F, eval=F}
+print(length(columns_list$categorical_columns))
+print(length(significant_cat_cols))
+print(length(columns_list$numerical_columns))
+print(length(significant_num_cols))
 ```
 
