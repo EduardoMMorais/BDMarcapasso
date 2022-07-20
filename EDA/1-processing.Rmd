@@ -36,7 +36,8 @@ df_names <- df_names %>%
                                    TRUE ~ variable.name),  # mismatch with dataset column name
          variable.name = str_replace(variable.name, "\\[", ""),
          variable.name = str_replace(variable.name, "\\]", ""),
-         field.label = str_replace(field.label, "_", " "), # add spaces
+         field.label = str_replace(field.label, "\\+", "com"),
+         field.label = str_replace_all(field.label, "_", " "), # add spaces
          field.label = str_replace_all(field.label, "[\r\n]" , ""),
          abbrev.field.label = str_replace(field.label, " \\s*\\([^\\)]+\\)", ""),
          abbrev.field.label = if_else(variable.name %in% c('admission_posop_count',
@@ -75,7 +76,7 @@ df[categorical_columns] <- lapply(df[categorical_columns],
 df[outcome_columns] <- lapply(df[outcome_columns],
                               as.numeric)
 df[date_columns] <- lapply(df[date_columns],
-                           dmy)
+                           ymd)
 
 columns_list <- list('categorical_columns' = categorical_columns,
                      'numerical_columns' = numerical_columns,
