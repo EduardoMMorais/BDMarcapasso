@@ -7,11 +7,13 @@ output:
     template: latex-template.tex
 params:
   outcome_column: readmission_30d
+  features_list: !r c()
 ---
 
 ```{r, include=FALSE}
 knitr::opts_chunk$set(
-  warning = F
+  warning = F,
+  message = F
 )
 ```
 
@@ -34,6 +36,7 @@ load('../dataset/processed_dictionary.RData')
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_column <- params$outcome_column
+features_list <- params$features_list
 ```
 
 # Filtering eligible pacients
@@ -52,7 +55,7 @@ eligible_columns = df_names %>%
   filter(momento.aquisicao == 'Admissão t0') %>%
   .$variable.name
 
-exception_columns = c('disch_outcomes_t0', 'icu_post_t0')
+exception_columns = c('death_intraop', 'death_intraop_1')
 
 correlated_columns = c('year_procedure_1', # com year_adm_t0
                        'age_surgery_1', # com age
@@ -62,11 +65,18 @@ correlated_columns = c('year_procedure_1', # com year_adm_t0
                        'suporte_hemod' # com proced_invasivos_qtde
                        )
 
-features = eligible_columns %>%
+eligible_features = eligible_columns %>%
   base::intersect(c(columns_list$categorical_columns, columns_list$numerical_columns)) %>%
   setdiff(c(exception_columns, correlated_columns))
 
+if (is.null(features_list)) {
+  features = eligible_features
+} else {
+  features = base::intersect(eligible_features, features_list)
+}
+
 length(features)
+print(features)
 ```
 
 # Train test split (70%/30%)
@@ -75,6 +85,7 @@ length(features)
 set.seed(42)
 
 df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
+df <- mutate(df, across(where(is.character), as.factor))
 
 df_split <- initial_split(df %>% dplyr::select(all_of(c(features, outcome_column))),
                           prop = .7, strata = all_of(outcome_column))
@@ -84,6 +95,14 @@ df_test <- testing(df_split)
 dim(df_train)[1] / dim(df)[1]
 dim(df_test)[1] / dim(df)[1]
 ```
+
+```{r echo=F, results=F}
+train_na_list = colnames(df_train)[colSums(is.na(df_train)) > 0]
+test_na_list = colnames(df_test)[colSums(is.na(df_test)) > 0]
+
+setequal(train_na_list, test_na_list)
+```
+
 
 # Global parameters
 
@@ -143,22 +162,13 @@ validation = function(model_fit, new_data) {
 
 # Boosted Tree (XGBoost)
 
-```{r echo = F, results=F}
-use_xgboost(sprintf('%s ~ .', outcome_column) %>% as.formula,
-            data = df_train)
-```
-
 ```{r}
 xgboost_recipe <- 
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
-  step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
-    "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
-    "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
-    "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
-    "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
-    "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", "ventilacao_mecanica")) %>% 
   step_novel(all_nominal_predictors()) %>% 
-  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>% 
+  step_unknown(all_nominal_predictors()) %>% 
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   step_zv(all_predictors()) 
 
 xgboost_spec <- boost_tree(
@@ -180,7 +190,7 @@ xgboost_grid <- grid_latin_hypercube(
   sample_size = sample_prop(),
   finalize(mtry(), df_train),
   learn_rate(),
-  size = 30
+  size = 10
 )
 
 xgboost_workflow <-
@@ -232,23 +242,14 @@ final_xgboost_fit %>%
 
 # GLM
 
-```{r echo = F, results=F}
-use_glmnet(sprintf('%s ~ .', outcome_column) %>% as.formula,
-           data = df_train)
-```
-
 ```{r}
 glmnet_recipe <- 
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
-  step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
-    "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
-    "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
-    "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
-    "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
-    "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", "ventilacao_mecanica")) %>% 
   step_novel(all_nominal_predictors()) %>% 
-  step_dummy(all_nominal_predictors()) %>% 
-  step_zv(all_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>% 
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_zv(all_predictors()) %>%
   step_normalize(all_numeric_predictors()) 
 
 glmnet_spec <- 
@@ -264,10 +265,6 @@ glmnet_workflow <-
 glm_fit <- glmnet_workflow %>% 
   fit(df_train)
 
-# glm_fit %>%
-#   pull_workflow_fit() %>%
-#   tidy()
-
 glm_auc = validation(glm_fit, df_test)
 ```
 
@@ -276,14 +273,11 @@ glm_auc = validation(glm_fit, df_test)
 ```{r results=F}
 tree_recipe <- 
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
-  step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
-    "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
-    "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
-    "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
-    "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
-    "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", "ventilacao_mecanica")) %>% 
   step_novel(all_nominal_predictors()) %>% 
-  step_zv(all_predictors())
+  step_unknown(all_nominal_predictors()) %>% 
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_zv(all_predictors()) 
 
 tree_spec <-
   decision_tree(cost_complexity = tune(),
@@ -291,9 +285,9 @@ tree_spec <-
   set_mode("classification") %>%
   set_engine("rpart") 
 
-tree_grid <- grid_regular(cost_complexity(),
-                          tree_depth(),
-                          levels = 10)
+tree_grid <- grid_latin_hypercube(cost_complexity(),
+                                  tree_depth(),
+                                  size = 10)
 
 tree_workflow <- 
   workflow() %>% 
@@ -307,16 +301,6 @@ tree_tune <-
 
 tree_tune %>% 
   collect_metrics()
-
-tree_tune %>%
-  collect_metrics() %>%
-  mutate(tree_depth = factor(tree_depth)) %>%
-  ggplot(aes(cost_complexity, mean, color = tree_depth)) +
-  geom_line(size = 1.5, alpha = 0.6) +
-  geom_point(size = 2) +
-  facet_wrap(~ .metric, scales = "free", nrow = 2) +
-  scale_x_log10(labels = scales::label_number()) +
-  scale_color_viridis_d(option = "plasma", begin = .9, end = 0)
 
 autoplot(tree_tune, metric = "roc_auc")
 
@@ -350,16 +334,11 @@ if (tree_auc$auc > 0.55){
 ```{r results=F}
 rf_recipe <- 
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
-  step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
-    "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
-    "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
-    "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
-    "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
-    "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", "ventilacao_mecanica")) %>% 
   step_novel(all_nominal_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>% 
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   step_zv(all_predictors()) %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_impute_mode(all_nominal_predictors()) %>%
   step_impute_mean(all_numeric_predictors())
 
 rf_spec <-
@@ -369,9 +348,9 @@ rf_spec <-
   set_mode("classification") %>%
   set_engine("ranger") 
 
-rf_grid <- grid_regular(mtry(range = c(1, 10)),
-                        min_n(),
-                        levels = 5)
+rf_grid <- grid_latin_hypercube(mtry(range = c(1, 10)),
+                                min_n(),
+                                size = 10)
 
 rf_workflow <- 
   workflow() %>% 
@@ -385,19 +364,6 @@ rf_tune <-
 
 rf_tune %>% 
   collect_metrics()
-
-rf_tune %>%
-  collect_metrics() %>%
-  filter(.metric == "roc_auc") %>%
-  select(mean, min_n, mtry) %>%
-  pivot_longer(min_n:mtry,
-    values_to = "value",
-    names_to = "parameter"
-  ) %>%
-  ggplot(aes(value, mean, color = parameter)) +
-  geom_point(show.legend = FALSE) +
-  facet_wrap(~parameter, scales = "free_x") +
-  labs(x = NULL, y = "AUC")
 
 autoplot(rf_tune, metric = "roc_auc")
 
@@ -418,73 +384,64 @@ last_rf_fit <-
 final_rf_fit <- extract_workflow(last_rf_fit)
 
 rf_auc = validation(final_rf_fit, df_test)
-
-# final_rf_fit %>% 
-#   extract_fit_parsnip() %>% 
-#   vip()
 ```
 
 # KNN
 
 ```{r}
-knn_recipe <- 
-  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
-  step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
-    "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
-    "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
-    "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
-    "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
-    "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", "ventilacao_mecanica")) %>% 
-  step_novel(all_nominal_predictors()) %>% 
-  step_zv(all_predictors()) %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_impute_mode(all_nominal_predictors()) %>%
-  step_impute_mean(all_numeric_predictors())
-
-knn_spec <-
-  nearest_neighbor(neighbors = tune(),
-                   # weight_func = tune(),
-                   dist_power = tune()) %>%
-  set_mode("classification") %>%
-  set_engine("kknn")
-
-knn_grid <- grid_regular(neighbors(),
-                         # weight_func(),
-                         dist_power(),
-                         levels = 2)
-
-knn_workflow <- 
-  workflow() %>% 
-  add_recipe(knn_recipe) %>% 
-  add_model(knn_spec) 
-
-knn_tune <- 
-  knn_workflow %>%
-  tune_grid(resamples = df_folds,
-            grid = knn_grid)
-
-knn_tune %>% 
-  collect_metrics()
-
-autoplot(knn_tune, metric = "roc_auc")
-
-knn_tune %>%
-  show_best("roc_auc")
-
-best_knn <- knn_tune %>%
-  select_best("roc_auc")
-
-final_knn_workflow <- 
-  knn_workflow %>% 
-  finalize_workflow(best_knn)
-
-last_knn_fit <- 
-  final_knn_workflow %>%
-  last_fit(df_split) 
-
-final_knn_fit <- extract_workflow(last_knn_fit)
-
-knn_auc = validation(final_knn_fit, df_test)
+# knn_recipe <-
+#   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>%
+#   step_novel(all_nominal_predictors()) %>% 
+#   step_unknown(all_nominal_predictors()) %>% 
+#   step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+#   step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+#   step_zv(all_predictors()) %>%
+#   step_impute_mean(all_numeric_predictors())
+# 
+# knn_spec <-
+#   nearest_neighbor(neighbors = tune(),
+#                    weight_func = tune(),
+#                    dist_power = tune()) %>%
+#   set_mode("classification") %>%
+#   set_engine("kknn")
+# 
+# knn_grid <- grid_latin_hypercube(neighbors(),
+#                                  weight_func(),
+#                                  dist_power(),
+#                                  size = 5)
+# 
+# knn_workflow <-
+#   workflow() %>%
+#   add_recipe(knn_recipe) %>%
+#   add_model(knn_spec)
+# 
+# knn_tune <-
+#   knn_workflow %>%
+#   tune_grid(resamples = df_folds,
+#             grid = knn_grid)
+# 
+# knn_tune %>%
+#   collect_metrics()
+# 
+# autoplot(knn_tune, metric = "roc_auc")
+# 
+# knn_tune %>%
+#   show_best("roc_auc")
+# 
+# best_knn <- knn_tune %>%
+#   select_best("roc_auc")
+# 
+# final_knn_workflow <-
+#   knn_workflow %>%
+#   finalize_workflow(best_knn)
+# 
+# last_knn_fit <-
+#   final_knn_workflow %>%
+#   last_fit(df_split)
+# 
+# final_knn_fit <- extract_workflow(last_knn_fit)
+# 
+# knn_auc = validation(final_knn_fit, df_test)
 ```
 
 # SVM
@@ -492,26 +449,21 @@ knn_auc = validation(final_knn_fit, df_test)
 ```{r}
 svm_recipe <- 
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
-  step_string2factor(one_of("sex", "race", "education_level", "patient_state", 
-    "underlying_heart_disease", "heart_disease", "nyha_basal", "hypertension", 
-    "prior_mi", "heart_failure", "af", "cardiac_arrest", "transplant", "valvopathy", 
-    "endocardites", "diabetes", "renal_failure", "hemodialysis", "stroke", 
-    "copd", "cancer", "surgery_count", "procedure_type_1", "reop_type_1", "cied_final_1", 
-    "death_intraop_1", "dialysis_hosp", "icu_hosp", "admission_pre_t0_180d", "ventilacao_mecanica")) %>% 
   step_novel(all_nominal_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>% 
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   step_zv(all_predictors()) %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_impute_mode(all_nominal_predictors()) %>%
   step_impute_mean(all_numeric_predictors())
-
+  
 svm_spec <-
   svm_rbf(cost = tune(), rbf_sigma = tune()) %>%
   set_mode("classification") %>%
   set_engine("kernlab")
 
-svm_grid <- grid_regular(cost(),
-                         rbf_sigma(),
-                         levels = 2)
+svm_grid <- grid_latin_hypercube(cost(),
+                                 rbf_sigma(),
+                                 size = 10)
 
 svm_workflow <- 
   workflow() %>% 
