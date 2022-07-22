@@ -1,5 +1,5 @@
 ---
-title: "Model"
+title: "Model Selection"
 author: "Eduardo Yuki Yada"
 geometry: margin=1cm
 output: 

@@ -4,6 +4,11 @@ rmarkdown::render('1-processing.Rmd',
                   output_file = './results/1-processing.pdf',
                   clean = TRUE)
 
+
+rmarkdown::render('2-distribution_shift.Rmd',
+                  output_file = './results/2-distribution_shift.pdf',
+                  clean = TRUE)
+
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_columns = setdiff(
@@ -21,23 +26,23 @@ for (outcome_column in outcome_columns[1]) {
              showWarnings = FALSE)
   
   rmarkdown::render(
-    '2-tables.Rmd',
+    '3-tables.Rmd',
     params = list(outcome_column = outcome_column),
-    output_file = paste0('./results/', outcome_column, '/2-tables.pdf'),
+    output_file = paste0('./results/', outcome_column, '/3-tables.pdf'),
     clean = TRUE
   )
   
   rmarkdown::render(
-    '3-plots.Rmd',
+    '4-plots.Rmd',
     params = list(outcome_column = outcome_column),
-    output_file = paste0('./results/', outcome_column, '/3-plots.pdf'),
+    output_file = paste0('./results/', outcome_column, '/4-plots.pdf'),
     clean = TRUE
   )
   
   rmarkdown::render(
-    '4-correlations.Rmd',
+    '5-correlations.Rmd',
     params = list(outcome_column = outcome_column),
-    output_file = paste0('./results/', outcome_column, '/4-correlations.pdf'),
+    output_file = paste0('./results/', outcome_column, '/5-correlations.pdf'),
     clean = TRUE
   )
   
@@ -58,18 +63,22 @@ for (outcome_column in outcome_columns[1]) {
   features_list = c(cat_features_list, num_features_list)
   
   rmarkdown::render(
-    '6-model.Rmd',
+    '6-model_selection.Rmd',
     params = list(outcome_column = outcome_column,
                   features_list = features_list),
-    output_file = paste0('./results/', outcome_column, '/6-model.pdf'),
+    output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
+    clean = TRUE
+  )
+  
+  rmarkdown::render(
+    '8-final_model.Rmd',
+    params = list(outcome_column = outcome_column,
+                  features_list = features_list),
+    output_file = paste0('./results/', outcome_column, '/8-final_model.pdf'),
     clean = TRUE
   )
 }
 
-rmarkdown::render('5-distribution_shift.Rmd',
-                  output_file = './results/5-distribution_shift.pdf',
+rmarkdown::render('7-model_selection_results.Rmd',
+                  output_file = './results/7-model_selection_results.pdf',
                   clean = TRUE)
-
-rmarkdown::render('7-final_results.Rmd',
-                  output_file = './results/7-final_results.pdf',
-                  clean=TRUE)
