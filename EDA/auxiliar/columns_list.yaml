@@ -6,6 +6,7 @@ categorical_columns:
 - underlying_heart_disease
 - heart_disease
 - nyha_basal
+- nyha_basal_group
 - hypertension
 - prior_mi
 - heart_failure
@@ -23,7 +24,9 @@ categorical_columns:
 - surgery_count
 - procedure_type_1
 - reop_type_1
+- procedure_type_new
 - cied_final_1
+- cied_final_group_1
 - death_intraop_1
 - reop_type_2
 - cied_final_2
@@ -118,11 +121,6 @@ numerical_columns:
 - readmission_60d
 - readmission_180d
 - readmission_1year
-- n_procedure_t0
-- n_procedure_30d
-- n_procedure_60d
-- n_procedure_180d
-- n_procedure_1year
 - survival_time_overall
 - death_intraop
 - death_hospitalar
@@ -162,9 +160,6 @@ numerical_columns:
 - antiviral
 - antiretroviral
 - classe_meds_qtde
-- classe_meds_cardio_qtde
-- meds_cardiovasc_qtde
-- meds_antimicrobianos
 - vni
 - cec
 - cir_cardiovascular
@@ -219,6 +214,14 @@ numerical_columns:
 - dieta_parenteral
 - bic
 - mpp
+- n_procedure_t0
+- n_procedure_30d
+- n_procedure_60d
+- n_procedure_180d
+- n_procedure_1year
+- classe_meds_cardio_qtde
+- meds_cardiovasc_qtde
+- meds_antimicrobianos
 date_columns:
 - dob
 - date_procedure_1

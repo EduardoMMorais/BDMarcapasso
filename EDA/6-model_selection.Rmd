@@ -6,7 +6,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: readmission_30d
+  outcome_column: readmission_60d
   features_list: !r c()
 ---
 
@@ -108,6 +108,7 @@ setequal(train_na_list, test_na_list)
 
 ```{r}
 k = 4 # Number of folds for cross validation
+grid_size = 10 # Number of parameter combination to tune on each model
 
 set.seed(234)
 df_folds <- vfold_cv(df_train, v = k,
@@ -172,7 +173,7 @@ xgboost_recipe <-
   step_zv(all_predictors()) 
 
 xgboost_spec <- boost_tree(
-  trees = 500,
+  trees = 100,
   tree_depth = tune(),
   min_n = tune(),
   loss_reduction = tune(),
@@ -190,7 +191,7 @@ xgboost_grid <- grid_latin_hypercube(
   sample_size = sample_prop(),
   finalize(mtry(), df_train),
   learn_rate(),
-  size = 10
+  size = grid_size
 )
 
 xgboost_workflow <-
@@ -287,7 +288,7 @@ tree_spec <-
 
 tree_grid <- grid_latin_hypercube(cost_complexity(),
                                   tree_depth(),
-                                  size = 10)
+                                  size = grid_size)
 
 tree_workflow <- 
   workflow() %>% 
@@ -343,14 +344,14 @@ rf_recipe <-
 
 rf_spec <-
   rand_forest(mtry = tune(),
-              trees = 1000,
+              trees = 100,
               min_n = tune()) %>%
   set_mode("classification") %>%
   set_engine("ranger") 
 
 rf_grid <- grid_latin_hypercube(mtry(range = c(1, 10)),
                                 min_n(),
-                                size = 10)
+                                size = grid_size)
 
 rf_workflow <- 
   workflow() %>% 
@@ -463,7 +464,7 @@ svm_spec <-
 
 svm_grid <- grid_latin_hypercube(cost(),
                                  rbf_sigma(),
-                                 size = 10)
+                                 size = grid_size)
 
 svm_workflow <- 
   workflow() %>% 
@@ -473,7 +474,7 @@ svm_workflow <-
 svm_tune <- 
   svm_workflow %>%
   tune_grid(resamples = df_folds,
-            grid = svm_grid)
+            grid = 5)
 
 svm_tune %>% 
   collect_metrics()

@@ -108,6 +108,7 @@ setequal(train_na_list, test_na_list)
 
 ```{r}
 k = 4 # Number of folds for cross validation
+grid_size = 20 # Number of parameter combination to tune on each model
 
 set.seed(234)
 df_folds <- vfold_cv(df_train, v = k,
@@ -172,7 +173,7 @@ xgboost_recipe <-
   step_zv(all_predictors()) 
 
 xgboost_spec <- boost_tree(
-  trees = 500,
+  trees = 200,
   tree_depth = tune(),
   min_n = tune(),
   loss_reduction = tune(),
@@ -190,7 +191,7 @@ xgboost_grid <- grid_latin_hypercube(
   sample_size = sample_prop(),
   finalize(mtry(), df_train),
   learn_rate(),
-  size = 10
+  size = grid_size
 )
 
 xgboost_workflow <-

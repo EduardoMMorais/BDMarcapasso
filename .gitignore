@@ -7,3 +7,5 @@ Marcapasso_DecisionTree*
 *.rds
 EDA/.Rhistory
 *.csv
+*.tex
+*.log
