@@ -93,17 +93,17 @@ close(con)
 
 ```{r}
 df <- df %>%
-  replace_na(list(death_30days = 0,
+  tidyr::replace_na(list(death_30days = 0,
                   death_180days = 0,
                   death_1year = 0,
                   death_2year = 0,
                   death_3year = 0))
 
-df %>%
-  select(death_30days, death_180days, death_1year, death_2year, death_3year) %>%
-  mutate(death_sum = death_30days + death_180days + death_1year + death_2year + death_3year) %>%
-  .$death_sum %>%
-  unique
+# df %>%
+#   select(death_30days, death_180days, death_1year, death_2year, death_3year) %>%
+#   mutate(death_sum = death_30days + death_180days + death_1year + death_2year + death_3year) %>%
+#   .$death_sum %>%
+#   unique
 ```
 
 # Recalculating outcome columns for modeling
