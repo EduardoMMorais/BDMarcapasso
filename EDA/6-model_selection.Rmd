@@ -42,6 +42,7 @@ library(tidymodels)
 library(usemodels) 
 library(vip)
 library(bonsai)
+library(lightgbm)
 ```
 
 # Loading data
@@ -131,7 +132,7 @@ df_folds <- vfold_cv(df_train, v = k,
 # Functions
 
 ```{r}
-validation = function(model_fit, new_data) {
+validation = function(model_fit, new_data, plot=TRUE) {
   library(pROC)
   library(caret)
   
@@ -142,7 +143,7 @@ validation = function(model_fit, new_data) {
   
   pROC_obj <- roc(
     new_data[[outcome_column]],
-    test_predictions_prob,
+    test_predictions_prob, 
     direction = "<",
     levels = c(0, 1),
     smoothed = TRUE,
@@ -157,18 +158,20 @@ validation = function(model_fit, new_data) {
     show.thres = TRUE
   )
   
-  sens.ci <- ci.se(pROC_obj)
-  plot(sens.ci, type = "shape", col = "lightblue")
-  plot(sens.ci, type = "bars")
-  
   test_predictions_class <-
     predict(model_fit, new_data = new_data, type = "class") %>%
     rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
     .$class
   
-  conf_matrix = table(test_predictions_class, new_data[[outcome_column]])
+  conf_matrix <- table(test_predictions_class, new_data[[outcome_column]])
   
-  confusionMatrix(conf_matrix) %>% print
+  if (plot) {
+    sens.ci <- ci.se(pROC_obj)
+    plot(sens.ci, type = "shape", col = "lightblue")
+    plot(sens.ci, type = "bars")
+    
+    confusionMatrix(conf_matrix) %>% print
+  }
   
   return(pROC_obj)
 }
@@ -186,25 +189,23 @@ xgboost_recipe <-
   step_zv(all_predictors())
 
 xgboost_spec <- boost_tree(
-  trees = tune(),
-  tree_depth = tune(),
-  min_n = tune(),
-  loss_reduction = tune(),
-  sample_size = tune(),
   mtry = tune(),
-  learn_rate = tune()
+  trees = tune(),
+  min_n = tune(),
+  tree_depth = tune(),
+  learn_rate = tune(),
+  loss_reduction = tune()
 ) %>%
   set_engine("xgboost") %>%
   set_mode("classification")
 
 xgboost_grid <- grid_latin_hypercube(
-  dials::trees(range = c(100L, 300L)),
-  tree_depth(),
-  min_n(),
-  loss_reduction(),
-  sample_size = sample_prop(),
   finalize(mtry(), df_train),
+  dials::trees(range = c(100L, 300L)),
+  min_n(),
+  tree_depth(),
   learn_rate(),
+  loss_reduction(),
   size = grid_size
 )
 
@@ -227,8 +228,8 @@ best_xgboost <- xgboost_tune %>%
 xgboost_tune %>%
   collect_metrics() %>%
   filter(.metric == "roc_auc") %>%
-  select(mean, mtry:sample_size) %>%
-  pivot_longer(mtry:sample_size,
+  select(mean, mtry:trees) %>%
+  pivot_longer(mtry:trees,
                values_to = "value",
                names_to = "parameter"
   ) %>%
@@ -256,7 +257,7 @@ final_xgboost_fit %>%
 
 xgboost_parameters <- xgboost_tune %>%
   show_best("roc_auc", n=1) %>%
-  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction, sample_size) %>%
+  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
   as.list
 
 saveRDS(
@@ -280,23 +281,24 @@ lightgbm_recipe <-
   step_zv(all_predictors())
 
 lightgbm_spec <- boost_tree(
-  trees = tune(),
-  tree_depth = tune(),
-  min_n = tune(),
-  loss_reduction = tune(),
   mtry = tune(),
-  learn_rate = tune()
+  trees = tune(),
+  min_n = tune(),
+  tree_depth = tune(),
+  learn_rate = tune(),
+  loss_reduction = tune(),
+  sample_size = 1
 ) %>%
   set_engine("lightgbm") %>%
   set_mode("classification")
 
 lightgbm_grid <- grid_latin_hypercube(
-  dials::trees(range = c(100L, 300L)),
-  tree_depth(),
-  min_n(),
-  loss_reduction(),
   finalize(mtry(), df_train),
+  dials::trees(range = c(100L, 300L)),
+  min_n(),
+  tree_depth(),
   learn_rate(),
+  loss_reduction(),
   size = grid_size
 )
 

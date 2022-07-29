@@ -294,32 +294,33 @@ selection_results %>%
 ```{r}
 lightgbm_recipe <-
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
-         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
+         data = df_train %>% dplyr::select(all_of(c(selected_features, outcome_column)))) %>%
   step_novel(all_nominal_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
   step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>%
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   step_impute_mean(all_numeric_predictors()) %>%
   step_zv(all_predictors())
 
 lightgbm_spec <- boost_tree(
-  trees = tune(),
-  tree_depth = tune(),
-  min_n = tune(),
-  loss_reduction = tune(),
   mtry = tune(),
+  trees = tune(),
+  min_n = tune(),
+  tree_depth = tune(),
   learn_rate = tune(),
-  sample_size = 1
+  loss_reduction = tune()
 ) %>%
   set_engine("lightgbm") %>%
   set_mode("classification")
 
 lightgbm_grid <- grid_latin_hypercube(
+  finalize(mtry(),
+           df_train %>% dplyr::select(all_of(c(selected_features, outcome_column)))),
   dials::trees(range = c(100L, 300L)),
-  tree_depth(),
   min_n(),
-  loss_reduction(),
-  finalize(mtry(), df_train),
+  tree_depth(),
   learn_rate(),
+  loss_reduction(),
   size = grid_size
 )
 
@@ -380,5 +381,9 @@ df_test_baked <- bake(trained_rec, new_data = df_test)
 matrix_test <- as.matrix(df_test_baked %>% select(-all_of(outcome_column)))
 
 shap.plot.summary.wrap1(model = lightgbm_model, X = matrix_test, top_n = 10, dilute = T)
+```
+
+```{r}
+lightgbm_model$params
 ```
 
