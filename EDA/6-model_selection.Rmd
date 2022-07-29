@@ -92,8 +92,7 @@ if (is.null(features_list)) {
   features = base::intersect(eligible_features, features_list)
 }
 
-length(features)
-print(features)
+gluedown::md_order(features, seq = TRUE, pad = TRUE)
 ```
 
 # Train test split (70%/30%)
@@ -144,13 +143,13 @@ validation = function(model_fit, new_data) {
   pROC_obj <- roc(
     new_data[[outcome_column]],
     test_predictions_prob,
+    direction = "<",
+    levels = c(0, 1),
     smoothed = TRUE,
-    # arguments for ci
     ci = TRUE,
     ci.alpha = 0.9,
     stratified = FALSE,
-    # arguments for plot
-    plot = TRUE,
+    plot = plot,
     auc.polygon = TRUE,
     max.auc.polygon = TRUE,
     grid = TRUE,
@@ -622,6 +621,7 @@ rf_auc = validation(final_rf_fit, df_test)
 df_auc <- tibble::tribble(
   ~Model, ~`AUC`, ~`Lower Limit`, ~`Upper Limit`,
   'XGBoost', as.numeric(xgboost_auc$auc), xgboost_auc$ci[1], xgboost_auc$ci[3],
+  'LightGBM', as.numeric(lightgbm_auc$auc), lightgbm_auc$ci[1], lightgbm_auc$ci[3],
   'GLM', as.numeric(glm_auc$auc), glm_auc$ci[1], glm_auc$ci[3],
   'Decision Tree', as.numeric(tree_auc$auc), tree_auc$ci[1], tree_auc$ci[3],
   'Random Forest', as.numeric(rf_auc$auc), rf_auc$ci[1], rf_auc$ci[3]

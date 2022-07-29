@@ -11,9 +11,25 @@ params:
 ---
 
 ```{r, include=FALSE}
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- difftime(Sys.time(), now, units = "mins")
+      # return a character string to show the time
+      paste("Minutes to run:", round(res, 3))
+    }
+  }
+}))
+
 knitr::opts_chunk$set(
   warning = F,
-  message = F
+  message = F,
+  time_it = TRUE
 )
 ```
 
@@ -25,6 +41,13 @@ library(yaml)
 library(tidymodels)
 library(usemodels) 
 library(vip)
+
+library(SHAPforxgboost)
+library(xgboost)
+library(Matrix)
+library(mltools)
+library(bonsai)
+library(lightgbm)
 ```
 
 # Loading data
@@ -75,8 +98,7 @@ if (is.null(features_list)) {
   features = base::intersect(eligible_features, features_list)
 }
 
-length(features)
-print(features)
+gluedown::md_order(features, seq = TRUE, pad = TRUE)
 ```
 
 # Train test split (70%/30%)
@@ -96,29 +118,23 @@ dim(df_train)[1] / dim(df)[1]
 dim(df_test)[1] / dim(df)[1]
 ```
 
-```{r echo=F, results=F}
-train_na_list = colnames(df_train)[colSums(is.na(df_train)) > 0]
-test_na_list = colnames(df_test)[colSums(is.na(df_test)) > 0]
-
-setequal(train_na_list, test_na_list)
-```
-
-
 # Global parameters
 
 ```{r}
-k = 4 # Number of folds for cross validation
-grid_size = 20 # Number of parameter combination to tune on each model
+k <- 4 # Number of folds for cross validation
+grid_size <- 50 # Number of parameter combination to tune on each model
 
 set.seed(234)
 df_folds <- vfold_cv(df_train, v = k,
                      strata = all_of(outcome_column))
+
+max_auc_loss <- 0.01
 ```
 
 # Functions
 
 ```{r}
-validation = function(model_fit, new_data) {
+validation = function(model_fit, new_data, plot=TRUE) {
   library(pROC)
   library(caret)
   
@@ -129,14 +145,14 @@ validation = function(model_fit, new_data) {
   
   pROC_obj <- roc(
     new_data[[outcome_column]],
-    test_predictions_prob,
+    test_predictions_prob, 
+    direction = "<",
+    levels = c(0, 1),
     smoothed = TRUE,
-    # arguments for ci
     ci = TRUE,
     ci.alpha = 0.9,
     stratified = FALSE,
-    # arguments for plot
-    plot = TRUE,
+    plot = plot,
     auc.polygon = TRUE,
     max.auc.polygon = TRUE,
     grid = TRUE,
@@ -144,77 +160,190 @@ validation = function(model_fit, new_data) {
     show.thres = TRUE
   )
   
-  sens.ci <- ci.se(pROC_obj)
-  plot(sens.ci, type = "shape", col = "lightblue")
-  plot(sens.ci, type = "bars")
-  
   test_predictions_class <-
     predict(model_fit, new_data = new_data, type = "class") %>%
     rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
     .$class
   
-  conf_matrix = table(test_predictions_class, new_data[[outcome_column]])
+  conf_matrix <- table(test_predictions_class, new_data[[outcome_column]])
   
-  confusionMatrix(conf_matrix) %>% print
+  if (plot) {
+    sens.ci <- ci.se(pROC_obj)
+    plot(sens.ci, type = "shape", col = "lightblue")
+    plot(sens.ci, type = "bars")
+    
+    confusionMatrix(conf_matrix) %>% print
+  }
   
   return(pROC_obj)
 }
 ```
 
-# Boosted Tree (XGBoost)
+# Feature Selection
 
 ```{r}
-xgboost_recipe <- 
-  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
-  step_novel(all_nominal_predictors()) %>% 
-  step_unknown(all_nominal_predictors()) %>% 
-  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
-  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
-  step_zv(all_predictors()) 
+model_fit <- function(features, outcome_column, hyperparameters){
+  model_recipe <- 
+    recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
+           data = df_train %>% select(all_of(c(features, outcome_column)))) %>% 
+    step_novel(all_nominal_predictors()) %>% 
+    step_unknown(all_nominal_predictors()) %>% 
+    step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+    step_impute_mean(all_numeric_predictors()) %>%
+    step_zv(all_predictors()) 
+  
+  model_spec <-
+    do.call(boost_tree, hyperparameters) %>%
+    set_engine("lightgbm") %>%
+    set_mode("classification")
+  
+  model_workflow <-
+    workflow() %>%
+    add_recipe(model_recipe) %>%
+    add_model(model_spec)
+  
+  model_fit <- model_workflow %>% 
+    fit(df_train)
+  
+  model_auc <- validation(model_fit, df_test, plot=F)
+  
+  raw_model <- parsnip::extract_fit_engine(model_fit)
+  
+  feature_importance <- lgb.importance(raw_model, percentage = TRUE)
+    
+  return(list(auc = as.numeric(model_auc$auc),
+              importance = feature_importance))
+}
+```
 
-xgboost_spec <- boost_tree(
-  trees = 200,
+```{r}
+hyperparameters <- readRDS(
+  sprintf(
+    "../EDA/auxiliar/hyperparameters/model_selection/lightgbm_parameters_%s.rds",
+    outcome_column
+  )
+)
+
+full_model <- model_fit(features, outcome_column, hyperparameters)
+
+sprintf('Full Model AUC: %.3f' ,full_model$auc)
+```
+
+Features with zero importance on the initial model:
+
+```{r}
+unimportant_features <- setdiff(features, full_model$importance$Feature)
+
+unimportant_features %>%
+  gluedown::md_order()
+```
+
+```{r}
+trimmed_features <- full_model$importance$Feature
+
+trimmed_model <- model_fit(trimmed_features,
+                           outcome_column, hyperparameters)
+
+sprintf('Trimmed Model AUC: %.3f' ,trimmed_model$auc)
+```
+
+```{r}
+current_features <- trimmed_features
+current_model <- trimmed_model
+current_least_important <- tail(trimmed_model$importance$Feature, 1)
+current_auc_loss <- full_model$auc - trimmed_model$auc
+
+selection_results <- tibble::tribble(
+  ~`Number of Features`, ~`AUC Loss`, ~`Least Important Feature`,
+  length(features), 0, tail(full_model$importance$Feature, 1),
+  length(trimmed_features), current_auc_loss, tail(trimmed_model$importance$Feature, 1)
+)
+
+while (current_auc_loss < max_auc_loss){
+  last_feature_droped <- current_least_important
+  
+  current_features <- setdiff(current_features, current_least_important)
+  current_model <- model_fit(current_features, outcome_column, hyperparameters)
+  current_least_important <- tail(current_model$importance$Feature, 1)
+  
+  current_auc_loss <- full_model$auc - current_model$auc
+  
+  selection_results <- selection_results %>%
+    add_row(`Number of Features` = length(current_features),
+            `AUC Loss` = current_auc_loss,
+            `Least Important Feature` = current_least_important)
+  
+  # print(c(length(current_features), current_auc_loss))
+}
+
+selection_results
+```
+
+```{r}
+selected_features <- c(current_features, last_feature_droped)
+
+selection_results %>%
+  filter(`Number of Features` < length(features)) %>%
+  mutate(`Features Removed` = length(features) - `Number of Features`) %>%
+  ggplot(aes(x = `Features Removed`, y = `AUC Loss`)) + 
+  geom_line()
+```
+
+# Hyperparameter tuning
+
+```{r}
+lightgbm_recipe <-
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
+         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
+  step_novel(all_nominal_predictors()) %>%
+  step_unknown(all_nominal_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>%
+  step_impute_mean(all_numeric_predictors()) %>%
+  step_zv(all_predictors())
+
+lightgbm_spec <- boost_tree(
+  trees = tune(),
   tree_depth = tune(),
   min_n = tune(),
   loss_reduction = tune(),
-  sample_size = tune(),
   mtry = tune(),
-  learn_rate = tune()
+  learn_rate = tune(),
+  sample_size = 1
 ) %>%
-  set_engine("xgboost") %>%
+  set_engine("lightgbm") %>%
   set_mode("classification")
 
-xgboost_grid <- grid_latin_hypercube(
+lightgbm_grid <- grid_latin_hypercube(
+  dials::trees(range = c(100L, 300L)),
   tree_depth(),
   min_n(),
   loss_reduction(),
-  sample_size = sample_prop(),
   finalize(mtry(), df_train),
   learn_rate(),
   size = grid_size
 )
 
-xgboost_workflow <-
+lightgbm_workflow <-
   workflow() %>%
-  add_recipe(xgboost_recipe) %>%
-  add_model(xgboost_spec)
+  add_recipe(lightgbm_recipe) %>%
+  add_model(lightgbm_spec)
 
-xgboost_tune <-
-  xgboost_workflow %>%
+lightgbm_tune <-
+  lightgbm_workflow %>%
   tune_grid(resamples = df_folds,
-            grid = xgboost_grid)
+            grid = lightgbm_grid)
 
-xgboost_tune %>%
+lightgbm_tune %>%
   show_best("roc_auc")
 
-best_xgboost <- xgboost_tune %>%
+best_lightgbm <- lightgbm_tune %>%
   select_best("roc_auc")
 
-xgboost_tune %>%
+lightgbm_tune %>%
   collect_metrics() %>%
   filter(.metric == "roc_auc") %>%
-  select(mean, mtry:sample_size) %>%
-  pivot_longer(mtry:sample_size,
+  select(mean, mtry:tree_depth) %>%
+  pivot_longer(mtry:tree_depth,
                values_to = "value",
                names_to = "parameter"
   ) %>%
@@ -223,38 +352,33 @@ xgboost_tune %>%
   facet_wrap(~parameter, scales = "free_x") +
   labs(x = NULL, y = "AUC")
 
-final_xgboost_workflow <-
-  xgboost_workflow %>%
-  finalize_workflow(best_xgboost)
+final_lightgbm_workflow <-
+  lightgbm_workflow %>%
+  finalize_workflow(best_lightgbm)
 
-last_xgboost_fit <-
-  final_xgboost_workflow %>%
+last_lightgbm_fit <-
+  final_lightgbm_workflow %>%
   last_fit(df_split)
 
-final_xgboost_fit <- extract_workflow(last_xgboost_fit)
+final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
 
-xgboost_auc = validation(final_xgboost_fit, df_test)
+lightgbm_auc <- validation(final_lightgbm_fit, df_test)
 
-final_xgboost_fit %>%
-  fit(data = df_train) %>%
-  extract_fit_parsnip() %>%
-  vip(geom = "point")
+lightgbm_parameters <- lightgbm_tune %>%
+  show_best("roc_auc", n=1) %>%
+  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
+  as.list
 ```
 
 ```{r}
-library(SHAPforxgboost)
-library(xgboost)
-library(Matrix)
-library(mltools)
+lightgbm_model <- parsnip::extract_fit_engine(final_lightgbm_fit)
 
-xgb_model <- parsnip::extract_fit_engine(last_xgboost_fit)
-
-trained_rec <- prep(xgboost_recipe, training = df_train)
+trained_rec <- prep(lightgbm_recipe, training = df_train)
 
 df_test_baked <- bake(trained_rec, new_data = df_test)
 
 matrix_test <- as.matrix(df_test_baked %>% select(-all_of(outcome_column)))
 
-shap.plot.summary.wrap1(model = xgb_model, X = matrix_test, top_n = 10, dilute = T)
+shap.plot.summary.wrap1(model = lightgbm_model, X = matrix_test, top_n = 10, dilute = T)
 ```
 
