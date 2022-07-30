@@ -4,7 +4,6 @@ rmarkdown::render('1-processing.Rmd',
                   output_file = './results/1-processing.pdf',
                   clean = TRUE)
 
-
 rmarkdown::render('2-distribution_shift.Rmd',
                   output_file = './results/2-distribution_shift.pdf',
                   clean = TRUE)
@@ -21,7 +20,10 @@ outcome_columns = setdiff(
   )
 )
 
-for (outcome_column in outcome_columns[1]) {
+start = 1
+finish = length(outcome_columns)
+
+for (outcome_column in outcome_columns[start:finish]) {
   dir.create(file.path(paste0('./results/', outcome_column)),
              showWarnings = FALSE)
   
@@ -31,14 +33,14 @@ for (outcome_column in outcome_columns[1]) {
     output_file = paste0('./results/', outcome_column, '/3-tables.pdf'),
     clean = TRUE
   )
-  
+
   rmarkdown::render(
     '4-plots.Rmd',
     params = list(outcome_column = outcome_column),
     output_file = paste0('./results/', outcome_column, '/4-plots.pdf'),
     clean = TRUE
   )
-  
+
   rmarkdown::render(
     '5-correlations.Rmd',
     params = list(outcome_column = outcome_column),

@@ -6,7 +6,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: readmission_30d
+  outcome_column: readmission_1year
   features_list: !r c()
 ---
 
@@ -182,7 +182,7 @@ validation = function(model_fit, new_data, plot=TRUE) {
 # Feature Selection
 
 ```{r}
-model_fit <- function(features, outcome_column, hyperparameters){
+model_fit_wf <- function(features, outcome_column, hyperparameters){
   model_recipe <- 
     recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
            data = df_train %>% select(all_of(c(features, outcome_column)))) %>% 
@@ -202,17 +202,23 @@ model_fit <- function(features, outcome_column, hyperparameters){
     add_recipe(model_recipe) %>%
     add_model(model_spec)
   
+  model_fit_rs <- model_workflow %>% 
+    fit_resamples(df_folds)
+  
   model_fit <- model_workflow %>% 
     fit(df_train)
   
   model_auc <- validation(model_fit, df_test, plot=F)
-  
+
   raw_model <- parsnip::extract_fit_engine(model_fit)
-  
+
   feature_importance <- lgb.importance(raw_model, percentage = TRUE)
-    
-  return(list(auc = as.numeric(model_auc$auc),
-              importance = feature_importance))
+
+  return(list(cv_auc = collect_metrics(model_fit_rs) %>% filter(.metric == 'roc_auc') %>% .$mean,
+              importance = feature_importance,
+              auc = as.numeric(model_auc$auc),
+              auc_lower = model_auc$ci[1],
+              auc_upper = model_auc$ci[3]))
 }
 ```
 
@@ -224,9 +230,10 @@ hyperparameters <- readRDS(
   )
 )
 
-full_model <- model_fit(features, outcome_column, hyperparameters)
+full_model <- model_fit_wf(features, outcome_column, hyperparameters)
 
-sprintf('Full Model AUC: %.3f' ,full_model$auc)
+sprintf('Full Model CV Train AUC: %.3f' ,full_model$cv_auc)
+sprintf('Full Model Test AUC: %.3f' ,full_model$auc)
 ```
 
 Features with zero importance on the initial model:
@@ -240,18 +247,19 @@ unimportant_features %>%
 
 ```{r}
 trimmed_features <- full_model$importance$Feature
+hyperparameters$mtry = min(hyperparameters$mtry, length(trimmed_features))
+trimmed_model <- model_fit_wf(trimmed_features,
+                              outcome_column, hyperparameters)
 
-trimmed_model <- model_fit(trimmed_features,
-                           outcome_column, hyperparameters)
-
-sprintf('Trimmed Model AUC: %.3f' ,trimmed_model$auc)
+sprintf('Trimmed Model CV Train AUC: %.3f' ,trimmed_model$cv_auc)
+sprintf('Trimmed Model Test AUC: %.3f' ,trimmed_model$auc)
 ```
 
 ```{r}
 current_features <- trimmed_features
 current_model <- trimmed_model
 current_least_important <- tail(trimmed_model$importance$Feature, 1)
-current_auc_loss <- full_model$auc - trimmed_model$auc
+current_auc_loss <- full_model$cv_auc - trimmed_model$cv_auc
 
 selection_results <- tibble::tribble(
   ~`Number of Features`, ~`AUC Loss`, ~`Least Important Feature`,
@@ -263,17 +271,18 @@ while (current_auc_loss < max_auc_loss){
   last_feature_droped <- current_least_important
   
   current_features <- setdiff(current_features, current_least_important)
-  current_model <- model_fit(current_features, outcome_column, hyperparameters)
+  hyperparameters$mtry = min(hyperparameters$mtry, length(current_features))
+  current_model <- model_fit_wf(current_features, outcome_column, hyperparameters)
   current_least_important <- tail(current_model$importance$Feature, 1)
   
-  current_auc_loss <- full_model$auc - current_model$auc
+  current_auc_loss <- full_model$cv_auc - current_model$cv_auc
   
   selection_results <- selection_results %>%
     add_row(`Number of Features` = length(current_features),
             `AUC Loss` = current_auc_loss,
             `Least Important Feature` = current_least_important)
   
-  # print(c(length(current_features), current_auc_loss))
+  print(c(length(current_features), current_auc_loss))
 }
 
 selection_results
@@ -281,6 +290,12 @@ selection_results
 
 ```{r}
 selected_features <- c(current_features, last_feature_droped)
+
+feature_selected_model <- model_fit_wf(selected_features,
+                                       outcome_column, hyperparameters)
+
+sprintf('Trimmed Model CV Train AUC: %.3f', feature_selected_model$cv_auc)
+sprintf('Trimmed Model Test AUC: %.3f', feature_selected_model$auc)
 
 selection_results %>%
   filter(`Number of Features` < length(features)) %>%
@@ -376,14 +391,55 @@ lightgbm_model <- parsnip::extract_fit_engine(final_lightgbm_fit)
 
 trained_rec <- prep(lightgbm_recipe, training = df_train)
 
+df_train_baked <- bake(trained_rec, new_data = df_train)
 df_test_baked <- bake(trained_rec, new_data = df_test)
 
+matrix_train <- as.matrix(df_train_baked %>% select(-all_of(outcome_column)))
 matrix_test <- as.matrix(df_test_baked %>% select(-all_of(outcome_column)))
 
-shap.plot.summary.wrap1(model = lightgbm_model, X = matrix_test, top_n = 10, dilute = T)
+shap.plot.summary.wrap1(model = lightgbm_model, X = matrix_train, top_n = 10, dilute = F)
+
+# Crunch SHAP values
+shap <- shap.prep(lightgbm_model, X_train = matrix_test)
+
+for (x in shap.importance(shap, names_only = TRUE)[1:5]) {
+  p <- shap.plot.dependence(
+    shap, 
+    x = x, 
+    color_feature = "auto", 
+    smooth = FALSE, 
+    jitter_width = 0.01, 
+    alpha = 0.4
+    ) +
+  ggtitle(x)
+  print(p)
+}
+
 ```
 
-```{r}
+```{r eval=F, echo=F}
 lightgbm_model$params
 ```
 
+# Models Comparison
+
+```{r}
+df_auc <- tibble::tribble(
+  ~Model, ~`AUC`, ~`Lower Limit`, ~`Upper Limit`,
+  'Full Model', full_model$auc, full_model$auc_lower, full_model$auc_upper,
+  'Trimmed Model', trimmed_model$auc, trimmed_model$auc_lower, trimmed_model$auc_upper,
+  'Feature Selected Model', feature_selected_model$auc, feature_selected_model$auc_lower, feature_selected_model$auc_upper,
+  'Tuned Model', as.numeric(lightgbm_auc$auc), lightgbm_auc$ci[1], lightgbm_auc$ci[3]
+) %>% 
+  mutate(Target = outcome_column,
+         Model = factor(Model, 
+                        levels = c('Full Model', 'Trimmed Model',
+                                   'Feature Selected Model', 'Tuned Model')))
+
+df_auc %>%
+  ggplot(aes(x = Model, y = AUC, ymin = `Lower Limit`, ymax = `Upper Limit`)) + 
+    geom_point() + 
+    geom_errorbar()
+
+saveRDS(df_auc, sprintf("../EDA/auxiliar/performance/tuning/%s_auc_result.RData", outcome_column))
+```
