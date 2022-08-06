@@ -77,7 +77,7 @@ exception_columns = c('death_intraop', 'death_intraop_1')
 
 correlated_columns = c('year_procedure_1', # com year_adm_t0
                        'age_surgery_1', # com age
-                       'admission_pre_t0_count', # com admission_t0
+                       'admission_t0', # com admission_pre_t0_count
                        'atb', # com meds_antimicrobianos
                        'classe_meds_cardio_qtde', # com classe_meds_qtde
                        'suporte_hemod' # com proced_invasivos_qtde
