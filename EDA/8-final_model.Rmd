@@ -1,5 +1,4 @@
 ---
-title: "Final Model"
 author: "Eduardo Yuki Yada"
 geometry: margin=1cm
 output: 
@@ -8,6 +7,7 @@ output:
 params:
   outcome_column: readmission_1year
   features_list: !r c()
+title: "`r paste('Final Model -', params$outcome_column)`"
 ---
 
 ```{r, include=FALSE}
@@ -28,8 +28,7 @@ knitr::knit_hooks$set(time_it = local({
 
 knitr::opts_chunk$set(
   warning = F,
-  message = F,
-  time_it = TRUE
+  message = F
 )
 ```
 
@@ -41,6 +40,7 @@ library(yaml)
 library(tidymodels)
 library(usemodels) 
 library(vip)
+library(kableExtra)
 
 library(SHAPforxgboost)
 library(xgboost)
@@ -97,7 +97,11 @@ if (is.null(features_list)) {
 } else {
   features = base::intersect(eligible_features, features_list)
 }
+```
 
+Starting features:
+
+```{r results='asis'}
 gluedown::md_order(features, seq = TRUE, pad = TRUE)
 ```
 
@@ -132,6 +136,15 @@ max_auc_loss <- 0.01
 ```
 
 # Functions
+
+```{r}
+niceFormatting = function(df, caption="", digits = 2, font_size = NULL){
+  df %>%
+    kbl(booktabs = T, longtable = T, caption = caption, digits = digits, format = "latex") %>%
+    kable_styling(font_size = font_size,
+                  latex_options = c("striped", "HOLD_position", "repeat_header"))
+}
+```
 
 ```{r}
 validation = function(model_fit, new_data, plot=TRUE) {
@@ -238,7 +251,7 @@ sprintf('Full Model Test AUC: %.3f' ,full_model$auc)
 
 Features with zero importance on the initial model:
 
-```{r}
+```{r results='asis'}
 unimportant_features <- setdiff(features, full_model$importance$Feature)
 
 unimportant_features %>%
@@ -282,10 +295,10 @@ while (current_auc_loss < max_auc_loss){
             `AUC Loss` = current_auc_loss,
             `Least Important Feature` = current_least_important)
   
-  print(c(length(current_features), current_auc_loss))
+  # print(c(length(current_features), current_auc_loss))
 }
 
-selection_results
+selection_results %>% niceFormatting(digits = 4)
 ```
 
 ```{r}
@@ -305,6 +318,12 @@ selection_results %>%
 ```
 
 # Hyperparameter tuning
+
+Selected features:
+
+```{r results='asis'}
+gluedown::md_order(selected_features, seq = TRUE, pad = TRUE)
+```
 
 ```{r}
 lightgbm_recipe <-
@@ -350,7 +369,8 @@ lightgbm_tune <-
             grid = lightgbm_grid)
 
 lightgbm_tune %>%
-  show_best("roc_auc")
+  show_best("roc_auc") %>%
+  niceFormatting(digits = 5)
 
 best_lightgbm <- lightgbm_tune %>%
   select_best("roc_auc")
@@ -386,7 +406,7 @@ lightgbm_parameters <- lightgbm_tune %>%
   as.list
 ```
 
-```{r}
+```{r warning=T, message=T}
 lightgbm_model <- parsnip::extract_fit_engine(final_lightgbm_fit)
 
 trained_rec <- prep(lightgbm_recipe, training = df_train)
@@ -404,17 +424,16 @@ shap <- shap.prep(lightgbm_model, X_train = matrix_test)
 
 for (x in shap.importance(shap, names_only = TRUE)[1:5]) {
   p <- shap.plot.dependence(
-    shap, 
-    x = x, 
-    color_feature = "auto", 
-    smooth = FALSE, 
-    jitter_width = 0.01, 
-    alpha = 0.4
-    ) +
-  ggtitle(x)
+    shap,
+    x = x,
+    color_feature = "auto",
+    smooth = TRUE,
+    jitter_width = 0.01,
+    alpha = 0.3
+  ) +
+    labs(title = x)
   print(p)
 }
-
 ```
 
 ```{r eval=F, echo=F}
@@ -437,9 +456,15 @@ df_auc <- tibble::tribble(
                                    'Feature Selected Model', 'Tuned Model')))
 
 df_auc %>%
-  ggplot(aes(x = Model, y = AUC, ymin = `Lower Limit`, ymax = `Upper Limit`)) + 
-    geom_point() + 
-    geom_errorbar()
+  ggplot(aes(
+    x = Model,
+    y = AUC,
+    ymin = `Lower Limit`,
+    ymax = `Upper Limit`
+  )) +
+  geom_point() +
+  geom_errorbar() +
+  labs(title = outcome_column)
 
 saveRDS(df_auc, sprintf("../EDA/auxiliar/performance/tuning/%s_auc_result.RData", outcome_column))
 

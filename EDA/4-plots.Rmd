@@ -1,5 +1,4 @@
 ---
-title: "Plots"
 author: "Eduardo Yuki Yada"
 geometry: margin=1cm
 output: 
@@ -7,6 +6,7 @@ output:
     template: latex-template.tex
 params:
   outcome_column: death_30days
+title: "`r paste('Plots -', params$outcome_column)`"
 ---
 
 # Imports

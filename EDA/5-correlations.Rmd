@@ -1,5 +1,4 @@
 ---
-title: "Correlations"
 author: "Eduardo Yuki Yada"
 geometry: margin=1cm
 output: 
@@ -8,6 +7,7 @@ output:
 params:
   outcome_column: readmission_30d
   threshold: 0.1
+title: "`r paste('Correlations -', params$outcome_column)`"
 ---
 
 # Imports
