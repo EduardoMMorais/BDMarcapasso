@@ -62,15 +62,6 @@ outcome_column <- params$outcome_column
 features_list <- params$features_list
 ```
 
-# Filtering eligible pacients
-
-```{r}
-df = df %>%
-  filter(disch_outcomes_t0 == 0)
-
-df %>% dim
-```
-
 # Eligible features
 
 ```{r}
@@ -117,9 +108,29 @@ df_split <- initial_split(df %>% dplyr::select(all_of(c(features, outcome_column
                           prop = .7, strata = all_of(outcome_column))
 df_train <- training(df_split)
 df_test <- testing(df_split)
+```
 
-dim(df_train)[1] / dim(df)[1]
-dim(df_test)[1] / dim(df)[1]
+```{r}
+df_train %>% group_by(!!sym(outcome_column)) %>% tally
+
+# library(ROSE)
+# df_train_rose <-
+#   ROSE(sprintf("%s ~ .", outcome_column) %>% as.formula,
+#        data = df_train)$data
+# df_train_rose %>% group_by(!!sym(outcome_column)) %>% tally
+
+library(caret)
+df_train_up <- upSample(x = df_train %>% select(-all_of(outcome_column)),
+                        y = df_train[[outcome_column]],
+                        yname = outcome_column)
+df_train_up %>% group_by(!!sym(outcome_column)) %>% tally
+
+df_train_down <- downSample(x = df_train %>% select(-all_of(outcome_column)),
+                            y = df_train[[outcome_column]],
+                            yname = outcome_column)
+df_train_down %>% group_by(!!sym(outcome_column)) %>% tally
+
+# df_train <- df_train_up
 ```
 
 # Global parameters

@@ -57,15 +57,6 @@ outcome_column <- params$outcome_column
 features_list <- params$features_list
 ```
 
-# Filtering eligible pacients
-
-```{r}
-df = df %>%
-  filter(disch_outcomes_t0 == 0)
-
-df %>% dim
-```
-
 # Eligible features
 
 ```{r}

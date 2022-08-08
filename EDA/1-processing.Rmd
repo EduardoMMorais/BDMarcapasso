@@ -106,6 +106,15 @@ df <- df %>%
 #   unique
 ```
 
+# Filtering eligible pacients
+
+```{r}
+df <- df %>%
+  filter(disch_outcomes_t0 == 0)
+
+df %>% dim
+```
+
 # Recalculating outcome columns for modeling
 
 ```{r}
