@@ -26,6 +26,10 @@ load('../dataset/processed_dictionary.RData')
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_column <- params$outcome_column
+
+if (outcome_column == 'general') {
+  df <- df %>% mutate(general = 'All')
+}
 ```
 
 # Numerical variables

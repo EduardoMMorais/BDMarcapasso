@@ -8,6 +8,19 @@ rmarkdown::render('2-distribution_shift.Rmd',
                   output_file = './results/2-distribution_shift.pdf',
                   clean = TRUE)
 
+dir.create(file.path(paste0('./results/', 'split')),
+           showWarnings = FALSE)
+
+rmarkdown::render('3-tables.Rmd',
+                  params = list(outcome_column = 'split'),
+                  output_file = paste0('./results/', 'split', '/3-tables.pdf'),
+                  clean = TRUE)
+
+rmarkdown::render('3-tables.Rmd',
+                  params = list(outcome_column = 'general'),
+                  output_file = './results/3-tables.pdf',
+                  clean = TRUE)
+
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_columns = setdiff(
@@ -54,16 +67,16 @@ for (outcome_column in outcome_columns[start:finish]) {
       outcome_column
     )
   )
-  
+
   num_features_list = readRDS(
     sprintf(
       "../EDA/auxiliar/significant_columns/numerical_%s.rds",
       outcome_column
     )
   )
-  
+
   features_list = c(cat_features_list, num_features_list)
-  
+
   rmarkdown::render(
     '6-model_selection.Rmd',
     params = list(outcome_column = outcome_column,
@@ -71,7 +84,7 @@ for (outcome_column in outcome_columns[start:finish]) {
     output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
     clean = TRUE
   )
-  
+
   rmarkdown::render(
     '8-final_model.Rmd',
     params = list(outcome_column = outcome_column,

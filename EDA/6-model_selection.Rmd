@@ -7,6 +7,7 @@ output:
 params:
   outcome_column: readmission_30d
   features_list: !r c()
+  balancing_method: !r NULL
 title: "`r paste('Model Selection -', params$outcome_column)`"
 ---
 
@@ -43,6 +44,7 @@ library(usemodels)
 library(vip)
 library(bonsai)
 library(lightgbm)
+library(caret)
 ```
 
 # Loading data
@@ -55,6 +57,9 @@ columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_column <- params$outcome_column
 features_list <- params$features_list
+
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
+df <- mutate(df, across(where(is.character), as.factor))
 ```
 
 # Eligible features
@@ -92,22 +97,25 @@ gluedown::md_order(features, seq = TRUE, pad = TRUE)
 ```{r}
 set.seed(42)
 
-df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
-df <- mutate(df, across(where(is.character), as.factor))
-
 df_split <- initial_split(df %>% dplyr::select(all_of(c(features, outcome_column))),
                           prop = .7, strata = all_of(outcome_column))
 df_train <- training(df_split)
 df_test <- testing(df_split)
 ```
 
-```{r echo=F, results=F}
-train_na_list = colnames(df_train)[colSums(is.na(df_train)) > 0]
-test_na_list = colnames(df_test)[colSums(is.na(df_test)) > 0]
-
-setequal(train_na_list, test_na_list)
+```{r}
+if (balancing_method == 'oversampling'){
+  df <- upSample(x = df_train %>% select(-all_of(outcome_column)),
+                 y = df_train[[outcome_column]],
+                 yname = outcome_column)
+  df %>% group_by(!!sym(outcome_column)) %>% tally
+} else if (balancing_method == 'undersampling'){
+  df <- downSample(x = df_train %>% select(-all_of(outcome_column)),
+                   y = df_train[[outcome_column]],
+                   yname = outcome_column)
+  df %>% group_by(!!sym(outcome_column)) %>% tally 
+}
 ```
-
 
 # Global parameters
 

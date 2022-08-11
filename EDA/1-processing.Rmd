@@ -98,12 +98,6 @@ df <- df %>%
                   death_1year = 0,
                   death_2year = 0,
                   death_3year = 0))
-
-# df %>%
-#   select(death_30days, death_180days, death_1year, death_2year, death_3year) %>%
-#   mutate(death_sum = death_30days + death_180days + death_1year + death_2year + death_3year) %>%
-#   .$death_sum %>%
-#   unique
 ```
 
 # Filtering eligible pacients
@@ -126,6 +120,19 @@ df <- df %>%
          death_2year = death_30days + death_180days + death_1year + death_2year,
          death_1year = death_30days + death_180days + death_1year,
          death_180days = death_30days + death_180days)
+```
+
+# Train/test split
+
+```{r}
+set.seed(42)
+
+df_split <- initial_split(df, prop = .7, strata = 'readmission_30d')
+df_train <- training(df_split) %>% mutate(split = 'train')
+df_test <- testing(df_split) %>% mutate(split = 'test')
+
+df <- bind_rows(df_train, df_test) %>%
+  mutate(split = factor(split, levels = c('train', 'test')))
 ```
 
 # Saving processed data
