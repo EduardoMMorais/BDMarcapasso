@@ -63,14 +63,14 @@ for (outcome_column in outcome_columns[start:finish]) {
   
   cat_features_list = readRDS(
     sprintf(
-      "../EDA/auxiliar/significant_columns/categorical_%s.rds",
+      "./auxiliar/significant_columns/categorical_%s.rds",
       outcome_column
     )
   )
 
   num_features_list = readRDS(
     sprintf(
-      "../EDA/auxiliar/significant_columns/numerical_%s.rds",
+      "./auxiliar/significant_columns/numerical_%s.rds",
       outcome_column
     )
   )

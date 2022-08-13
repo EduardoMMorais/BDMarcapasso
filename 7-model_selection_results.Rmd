@@ -23,7 +23,7 @@ niceFormatting = function(df, caption="", digits = 2, font_size = NULL, label = 
 
 
 ```{r}
-path <- "../EDA/auxiliar/model_selection/performance"
+path <- "./auxiliar/model_selection/performance"
 
 df <- tibble()
 
@@ -98,7 +98,7 @@ df %>%
 ```
 
 ```{r}
-path <- "../EDA/auxiliar/model_selection/performance"
+path <- "./auxiliar/model_selection/performance"
 
 df <- tibble()
 

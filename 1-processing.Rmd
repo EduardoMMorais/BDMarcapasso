@@ -28,9 +28,9 @@ library(rsample)
 # Loading files
 
 ```{r warning=F, message=F}
-df <- read_csv("../dataset/BD Marcapasso_11jul22.csv", show_col_types = FALSE) %>% 
+df <- read_csv("dataset/BD Marcapasso_11jul22.csv", show_col_types = FALSE) %>% 
   select(-record_id)
-df_names <- read_excel("../dataset/Dicionario_dados_BD Marcapasso_11jul22.xlsx")
+df_names <- read_excel("dataset/Dicionario_dados_BD Marcapasso_11jul22.xlsx")
 ```
 
 # Fixing data dictionary
@@ -145,15 +145,15 @@ df_test <- testing(df_split) %>% mutate(split = 'test')
 df <- bind_rows(df_train, df_test) %>%
   mutate(split = factor(split, levels = c('train', 'test')))
 
-saveRDS(df_split, "../dataset/split_object.rds")
+saveRDS(df_split, "dataset/split_object.rds")
 ```
 
 # Saving processed data
 
 ```{r}
-saveRDS(df, "../dataset/processed_data.rds")
-saveRDS(df_names, "../dataset/processed_dictionary.rds")
+saveRDS(df, "dataset/processed_data.rds")
+saveRDS(df_names, "dataset/processed_dictionary.rds")
 
-save(df, file = "../dataset/processed_data.RData")
-save(df_names, file = "../dataset/processed_dictionary.RData")
+save(df, file = "dataset/processed_data.RData")
+save(df_names, file = "dataset/processed_dictionary.RData")
 ```

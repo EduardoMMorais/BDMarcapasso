@@ -28,8 +28,8 @@ options(dplyr.summarise.inform = FALSE)
 # Loading data
 
 ```{r}
-load('../dataset/processed_data.RData') 
-load('../dataset/processed_dictionary.RData') 
+load('dataset/processed_data.RData') 
+load('dataset/processed_dictionary.RData') 
 
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 

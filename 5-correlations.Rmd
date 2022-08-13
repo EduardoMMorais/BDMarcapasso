@@ -29,8 +29,8 @@ library(ggcorrplot)
 # Loading data
 
 ```{r}
-load('../dataset/processed_data.RData') 
-load('../dataset/processed_dictionary.RData') 
+load('dataset/processed_data.RData') 
+load('dataset/processed_dictionary.RData') 
 
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
@@ -218,10 +218,10 @@ chisq.test(df[[outcome_column]],
 
 ```{r}
 saveRDS(significant_cat_cols,
-        file = sprintf("../EDA/auxiliar/significant_columns/categorical_%s.rds", outcome_column))
+        file = sprintf("./auxiliar/significant_columns/categorical_%s.rds", outcome_column))
 
 saveRDS(significant_num_cols,
-        file = sprintf("../EDA/auxiliar/significant_columns/numerical_%s.rds", outcome_column))
+        file = sprintf("./auxiliar/significant_columns/numerical_%s.rds", outcome_column))
 ```
 
 ```{r echo=F, results==F}

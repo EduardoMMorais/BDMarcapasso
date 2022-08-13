@@ -53,8 +53,8 @@ library(lightgbm)
 # Loading data
 
 ```{r}
-load('../dataset/processed_data.RData') 
-load('../dataset/processed_dictionary.RData') 
+load('dataset/processed_data.RData') 
+load('dataset/processed_dictionary.RData') 
 
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
@@ -105,7 +105,7 @@ gluedown::md_order(features, seq = TRUE, pad = TRUE)
 set.seed(42)
 
 if (outcome_column == 'readmission_30d') {
-  df_split <- readRDS("../dataset/split_object.rds")
+  df_split <- readRDS("dataset/split_object.rds")
 } else {
   df_split <- initial_split(df, prop = .7, strata = all_of(outcome_column))
 }
@@ -230,7 +230,7 @@ model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
 ```{r}
 hyperparameters <- readRDS(
   sprintf(
-    "../EDA/auxiliar/model_selection/hyperparameters/lightgbm_%s.rds",
+    "./auxiliar/model_selection/hyperparameters/lightgbm_%s.rds",
     outcome_column
   )
 )
@@ -312,7 +312,7 @@ if (exists('last_feature_dropped')) {
   selected_features <- current_features
 }
 
-con <- file(sprintf('../EDA/auxiliar/final_model/selected_features/%s.yaml', outcome_column), "w")
+con <- file(sprintf('./auxiliar/final_model/selected_features/%s.yaml', outcome_column), "w")
 write_yaml(selected_features, con)
 close(con)
 
@@ -420,7 +420,7 @@ lightgbm_parameters <- lightgbm_tune %>%
 saveRDS(
   lightgbm_parameters,
   file = sprintf(
-    "../EDA/auxiliar/final_model/hyperparameters/lightgbm_%s.rds",
+    "./auxiliar/final_model/hyperparameters/lightgbm_%s.rds",
     outcome_column
   )
 )
@@ -491,5 +491,5 @@ df_auc %>%
   geom_errorbar() +
   labs(title = outcome_column)
 
-saveRDS(df_auc, sprintf("../EDA/auxiliar/final_model/performance/%s.RData", outcome_column))
+saveRDS(df_auc, sprintf("./auxiliar/final_model/performance/%s.RData", outcome_column))
 ```

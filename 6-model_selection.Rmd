@@ -49,8 +49,8 @@ library(caret)
 # Loading data
 
 ```{r}
-load('../dataset/processed_data.RData') 
-load('../dataset/processed_dictionary.RData') 
+load('dataset/processed_data.RData') 
+load('dataset/processed_dictionary.RData') 
 
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
@@ -96,7 +96,7 @@ gluedown::md_order(features, seq = TRUE, pad = TRUE)
 set.seed(42)
 
 if (outcome_column == 'readmission_30d') {
-  df_split <- readRDS("../dataset/split_object.rds")
+  df_split <- readRDS("./dataset/split_object.rds")
 } else {
   df_split <- initial_split(df, prop = .7, strata = all_of(outcome_column))
 }
@@ -250,7 +250,7 @@ xgboost_parameters <- xgboost_tune %>%
 saveRDS(
   xgboost_parameters,
   file = sprintf(
-    "../EDA/auxiliar/model_selection/hyperparameters/xgboost_%s.rds",
+    "./auxiliar/model_selection/hyperparameters/xgboost_%s.rds",
     outcome_column
   )
 )
@@ -338,7 +338,7 @@ lightgbm_parameters <- lightgbm_tune %>%
 saveRDS(
   lightgbm_parameters,
   file = sprintf(
-    "../EDA/auxiliar/model_selection/hyperparameters/lightgbm_%s.rds",
+    "./auxiliar/model_selection/hyperparameters/lightgbm_%s.rds",
     outcome_column
   )
 )
@@ -622,6 +622,6 @@ df_auc %>%
     geom_point() + 
     geom_errorbar()
 
-saveRDS(df_auc, sprintf("../EDA/auxiliar/model_selection/performance/%s.RData", outcome_column))
+saveRDS(df_auc, sprintf("./auxiliar/model_selection/performance/%s.RData", outcome_column))
 ```
 
