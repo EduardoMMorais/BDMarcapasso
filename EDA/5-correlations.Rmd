@@ -10,6 +10,13 @@ params:
 title: "`r paste('Correlations -', params$outcome_column)`"
 ---
 
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  warning = F,
+  message = F
+)
+```
+
 # Imports
 
 ```{r warning=F, message=F}
@@ -29,6 +36,10 @@ columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_column <- params$outcome_column
 threshold <- params$threshold
+print(threshold)
+
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.character)
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.integer)
 ```
 
 # Functions

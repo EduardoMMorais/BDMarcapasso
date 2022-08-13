@@ -5,7 +5,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: readmission_1year
+  outcome_column: readmission_30d
   features_list: !r c()
 title: "`r paste('Final Model -', params$outcome_column)`"
 ---
@@ -104,31 +104,14 @@ gluedown::md_order(features, seq = TRUE, pad = TRUE)
 ```{r}
 set.seed(42)
 
-df_split <- initial_split(df %>% dplyr::select(all_of(c(features, outcome_column))),
-                          prop = .7, strata = all_of(outcome_column))
-df_train <- training(df_split)
-df_test <- testing(df_split)
-```
+if (outcome_column == 'readmission_30d') {
+  df_split <- readRDS("../dataset/split_object.rds")
+} else {
+  df_split <- initial_split(df, prop = .7, strata = all_of(outcome_column))
+}
 
-```{r}
-df_train %>% group_by(!!sym(outcome_column)) %>% tally
-
-# library(ROSE)
-# df_train_rose <-
-#   ROSE(sprintf("%s ~ .", outcome_column) %>% as.formula,
-#        data = df_train)$data
-# df_train_rose %>% group_by(!!sym(outcome_column)) %>% tally
-
-library(caret)
-df_train_up <- upSample(x = df_train %>% select(-all_of(outcome_column)),
-                        y = df_train[[outcome_column]],
-                        yname = outcome_column)
-df_train_up %>% group_by(!!sym(outcome_column)) %>% tally
-
-df_train_down <- downSample(x = df_train %>% select(-all_of(outcome_column)),
-                            y = df_train[[outcome_column]],
-                            yname = outcome_column)
-df_train_down %>% group_by(!!sym(outcome_column)) %>% tally
+df_train <- training(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
+df_test <- testing(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
 ```
 
 # Global parameters
@@ -210,7 +193,7 @@ model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
            data = df_train %>% select(all_of(c(features, outcome_column)))) %>% 
     step_novel(all_nominal_predictors()) %>% 
     step_unknown(all_nominal_predictors()) %>% 
-    step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+    step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>% 
     step_impute_mean(all_numeric_predictors()) %>%
     step_zv(all_predictors()) 
   
@@ -230,7 +213,7 @@ model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
   model_fit <- model_workflow %>% 
     fit(df_train)
   
-  model_auc <- validation(model_fit, df_test, plot=F)
+  model_auc <- validation(model_fit, df_test, plot = F)
 
   raw_model <- parsnip::extract_fit_engine(model_fit)
 
@@ -247,7 +230,7 @@ model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
 ```{r}
 hyperparameters <- readRDS(
   sprintf(
-    "../EDA/auxiliar/hyperparameters/model_selection/lightgbm_parameters_%s.rds",
+    "../EDA/auxiliar/model_selection/hyperparameters/lightgbm_%s.rds",
     outcome_column
   )
 )
@@ -278,18 +261,29 @@ sprintf('Trimmed Model Test AUC: %.3f' ,trimmed_model$auc)
 ```
 
 ```{r}
-current_features <- trimmed_features
-current_model <- trimmed_model
-current_least_important <- tail(trimmed_model$importance$Feature, 1)
-current_auc_loss <- full_model$cv_auc - trimmed_model$cv_auc
-
 selection_results <- tibble::tribble(
   ~`Number of Features`, ~`AUC Loss`, ~`Least Important Feature`,
-  length(features), 0, tail(full_model$importance$Feature, 1),
-  length(trimmed_features), current_auc_loss, tail(trimmed_model$importance$Feature, 1)
+  length(features), 0, tail(full_model$importance$Feature, 1)
 )
 
-while (current_auc_loss < max_auc_loss){
+if (full_model$cv_auc - trimmed_model$cv_auc < max_auc_loss) {
+  current_features <- trimmed_features
+  current_model <- trimmed_model
+  current_least_important <- tail(current_model$importance$Feature, 1)
+  current_auc_loss <- full_model$cv_auc - current_model$cv_auc
+  
+  selection_results <- selection_results %>%
+    add_row(`Number of Features` = length(trimmed_features),
+            `AUC Loss` = current_auc_loss,
+            `Least Important Feature` = current_least_important)
+} else {
+  current_features <- features
+  current_model <- full_model
+  current_least_important <- tail(current_model$importance$Feature, 1)
+  current_auc_loss <- 0
+}
+
+while (current_auc_loss < max_auc_loss) {
   last_feature_droped <- current_least_important
   
   current_features <- setdiff(current_features, current_least_important)
@@ -310,8 +304,17 @@ while (current_auc_loss < max_auc_loss){
 selection_results %>% niceFormatting(digits = 4)
 ```
 
+
 ```{r}
-selected_features <- c(current_features, last_feature_droped)
+if (exists('last_feature_dropped')) {
+  selected_features <- c(current_features, last_feature_droped)
+} else {
+  selected_features <- current_features
+}
+
+con <- file(sprintf('../EDA/auxiliar/final_model/selected_features/%s.yaml', outcome_column), "w")
+write_yaml(selected_features, con)
+close(con)
 
 feature_selected_model <- model_fit_wf(df_train, selected_features,
                                        outcome_column, hyperparameters)
@@ -340,7 +343,7 @@ lightgbm_recipe <-
          data = df_train %>% dplyr::select(all_of(c(selected_features, outcome_column)))) %>%
   step_novel(all_nominal_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
-  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
   step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
   step_impute_mean(all_numeric_predictors()) %>%
   step_zv(all_predictors())
@@ -410,16 +413,20 @@ final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
 lightgbm_auc <- validation(final_lightgbm_fit, df_test)
 
 lightgbm_parameters <- lightgbm_tune %>%
-  show_best("roc_auc", n=1) %>%
+  show_best("roc_auc", n = 1) %>%
   select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
   as.list
+
+saveRDS(
+  lightgbm_parameters,
+  file = sprintf(
+    "../EDA/auxiliar/final_model/hyperparameters/lightgbm_%s.rds",
+    outcome_column
+  )
+)
 ```
 
-```{r}
-oversampled_model <- model_fit_wf(df_train_up, selected_features, outcome_column, lightgbm_parameters)
-
-undersampled_model <- model_fit_wf(df_train_down, selected_features, outcome_column, lightgbm_parameters)
-```
+# SHAP values
 
 ```{r warning=T, message=T}
 lightgbm_model <- parsnip::extract_fit_engine(final_lightgbm_fit)
@@ -464,8 +471,8 @@ df_auc <- tibble::tribble(
   'Trimmed Model', trimmed_model$auc, trimmed_model$auc_lower, trimmed_model$auc_upper,
   'Feature Selected Model', feature_selected_model$auc, feature_selected_model$auc_lower, feature_selected_model$auc_upper,
   'Tuned Model', as.numeric(lightgbm_auc$auc), lightgbm_auc$ci[1], lightgbm_auc$ci[3],
-  'Oversampled Model', as.numeric(oversampled_model$auc), oversampled_model$auc_lower, oversampled_model$auc_upper,
-  'Undersampled Model', as.numeric(undersampled_model$auc), undersampled_model$auc_lower, undersampled_model$auc_upper
+  # 'Oversampled Model', as.numeric(oversampled_model$auc), oversampled_model$auc_lower, oversampled_model$auc_upper,
+  # 'Undersampled Model', as.numeric(undersampled_model$auc), undersampled_model$auc_lower, undersampled_model$auc_upper
 ) %>% 
   mutate(Target = outcome_column,
          Model = factor(Model, 
@@ -483,13 +490,6 @@ df_auc %>%
   geom_point() +
   geom_errorbar() +
   labs(title = outcome_column)
-```
 
-# Saving results
-
-```{r}
-saveRDS(df_auc, sprintf("../EDA/auxiliar/performance/tuning/%s_auc_result.RData", outcome_column))
-
-# Save the final model
-saveRDS(final_lightgbm_fit, sprintf("../EDA/results/%s/final_model.RData", outcome_column))
+saveRDS(df_auc, sprintf("../EDA/auxiliar/final_model/performance/%s.RData", outcome_column))
 ```

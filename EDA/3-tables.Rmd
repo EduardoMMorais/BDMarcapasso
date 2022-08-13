@@ -9,6 +9,13 @@ params:
 title: "`r paste('Tables -', params$outcome_column)`"
 ---
 
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  warning = F,
+  message = F
+)
+```
+
 # Imports
 
 ```{r warning=F, message=F}
@@ -30,6 +37,9 @@ outcome_column <- params$outcome_column
 if (outcome_column == 'general') {
   df <- df %>% mutate(general = 'All')
 }
+
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.character)
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.integer)
 ```
 
 # Numerical variables

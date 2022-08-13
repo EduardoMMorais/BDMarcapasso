@@ -8,6 +8,13 @@ output:
     template: latex-template.tex
 ---
 
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  warning = F,
+  message = F
+)
+```
+
 # Imports
 
 ```{r warning=F, message=F}
@@ -15,6 +22,7 @@ library(tidyverse)
 library(readxl)
 library(yaml)
 library(lubridate)
+library(rsample)
 ```
 
 # Loading files
@@ -120,6 +128,9 @@ df <- df %>%
          death_2year = death_30days + death_180days + death_1year + death_2year,
          death_1year = death_30days + death_180days + death_1year,
          death_180days = death_30days + death_180days)
+
+df[outcome_columns] <- lapply(df[outcome_columns],
+                              as.factor)
 ```
 
 # Train/test split
@@ -133,6 +144,8 @@ df_test <- testing(df_split) %>% mutate(split = 'test')
 
 df <- bind_rows(df_train, df_test) %>%
   mutate(split = factor(split, levels = c('train', 'test')))
+
+saveRDS(df_split, "../dataset/split_object.rds")
 ```
 
 # Saving processed data

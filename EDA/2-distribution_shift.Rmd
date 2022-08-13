@@ -9,11 +9,20 @@ params:
   outcome_column: readmission_30d
 ---
 
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  warning = F,
+  message = F
+)
+```
+
 # Imports
 
 ```{r warning=F, message=F}
 library(tidyverse)
 library(yaml)
+
+options(dplyr.summarise.inform = FALSE)
 ```
 
 # Loading data
@@ -25,6 +34,9 @@ load('../dataset/processed_dictionary.RData')
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_column <- params$outcome_column
+
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.character)
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.integer)
 ```
 
 # Plots

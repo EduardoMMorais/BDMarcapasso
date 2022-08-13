@@ -7,7 +7,6 @@ output:
 params:
   outcome_column: readmission_30d
   features_list: !r c()
-  balancing_method: !r NULL
 title: "`r paste('Model Selection -', params$outcome_column)`"
 ---
 
@@ -58,7 +57,6 @@ columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 outcome_column <- params$outcome_column
 features_list <- params$features_list
 
-df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
 df <- mutate(df, across(where(is.character), as.factor))
 ```
 
@@ -97,24 +95,14 @@ gluedown::md_order(features, seq = TRUE, pad = TRUE)
 ```{r}
 set.seed(42)
 
-df_split <- initial_split(df %>% dplyr::select(all_of(c(features, outcome_column))),
-                          prop = .7, strata = all_of(outcome_column))
-df_train <- training(df_split)
-df_test <- testing(df_split)
-```
-
-```{r}
-if (balancing_method == 'oversampling'){
-  df <- upSample(x = df_train %>% select(-all_of(outcome_column)),
-                 y = df_train[[outcome_column]],
-                 yname = outcome_column)
-  df %>% group_by(!!sym(outcome_column)) %>% tally
-} else if (balancing_method == 'undersampling'){
-  df <- downSample(x = df_train %>% select(-all_of(outcome_column)),
-                   y = df_train[[outcome_column]],
-                   yname = outcome_column)
-  df %>% group_by(!!sym(outcome_column)) %>% tally 
+if (outcome_column == 'readmission_30d') {
+  df_split <- readRDS("../dataset/split_object.rds")
+} else {
+  df_split <- initial_split(df, prop = .7, strata = all_of(outcome_column))
 }
+
+df_train <- training(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
+df_test <- testing(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
 ```
 
 # Global parameters
@@ -262,7 +250,7 @@ xgboost_parameters <- xgboost_tune %>%
 saveRDS(
   xgboost_parameters,
   file = sprintf(
-    "../EDA/auxiliar/hyperparameters/model_selection/xgboost_parameters_%s.rds",
+    "../EDA/auxiliar/model_selection/hyperparameters/xgboost_%s.rds",
     outcome_column
   )
 )
@@ -350,7 +338,7 @@ lightgbm_parameters <- lightgbm_tune %>%
 saveRDS(
   lightgbm_parameters,
   file = sprintf(
-    "../EDA/auxiliar/hyperparameters/model_selection/lightgbm_parameters_%s.rds",
+    "../EDA/auxiliar/model_selection/hyperparameters/lightgbm_%s.rds",
     outcome_column
   )
 )
@@ -634,6 +622,6 @@ df_auc %>%
     geom_point() + 
     geom_errorbar()
 
-saveRDS(df_auc, sprintf("../EDA/auxiliar/performance/%s_auc_result.RData", outcome_column))
+saveRDS(df_auc, sprintf("../EDA/auxiliar/model_selection/performance/%s.RData", outcome_column))
 ```
 
