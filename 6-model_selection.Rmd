@@ -243,7 +243,7 @@ final_xgboost_fit %>%
   vip(geom = "point")
 
 xgboost_parameters <- xgboost_tune %>%
-  show_best("roc_auc", n=1) %>%
+  show_best("roc_auc", n = 1) %>%
   select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
   as.list
 
@@ -487,7 +487,7 @@ last_rf_fit <-
 
 final_rf_fit <- extract_workflow(last_rf_fit)
 
-rf_auc = validation(final_rf_fit, df_test)
+rf_auc <- validation(final_rf_fit, df_test)
 ```
 
 # KNN

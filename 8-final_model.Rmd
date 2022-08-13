@@ -68,13 +68,13 @@ df <- mutate(df, across(where(is.character), as.factor))
 # Eligible features
 
 ```{r}
-eligible_columns = df_names %>%
+eligible_columns <- df_names %>%
   filter(momento.aquisicao == 'Admissão t0') %>%
   .$variable.name
 
-exception_columns = c('death_intraop', 'death_intraop_1')
+exception_columns <- c('death_intraop', 'death_intraop_1')
 
-correlated_columns = c('year_procedure_1', # com year_adm_t0
+correlated_columns <- c('year_procedure_1', # com year_adm_t0
                        'age_surgery_1', # com age
                        'admission_t0', # com admission_pre_t0_count
                        'atb', # com meds_antimicrobianos
@@ -82,7 +82,7 @@ correlated_columns = c('year_procedure_1', # com year_adm_t0
                        'suporte_hemod' # com proced_invasivos_qtde
                        )
 
-eligible_features = eligible_columns %>%
+eligible_features <- eligible_columns %>%
   base::intersect(c(columns_list$categorical_columns, columns_list$numerical_columns)) %>%
   setdiff(c(exception_columns, correlated_columns))
 
@@ -130,7 +130,7 @@ max_auc_loss <- 0.01
 # Functions
 
 ```{r}
-niceFormatting = function(df, caption="", digits = 2, font_size = NULL){
+niceFormatting <- function(df, caption="", digits = 2, font_size = NULL){
   df %>%
     kbl(booktabs = T, longtable = T, caption = caption, digits = digits, format = "latex") %>%
     kable_styling(font_size = font_size,
@@ -252,7 +252,7 @@ unimportant_features %>%
 
 ```{r}
 trimmed_features <- full_model$importance$Feature
-hyperparameters$mtry = min(hyperparameters$mtry, length(trimmed_features))
+hyperparameters$mtry <- min(hyperparameters$mtry, length(trimmed_features))
 trimmed_model <- model_fit_wf(df_train, trimmed_features,
                               outcome_column, hyperparameters)
 
