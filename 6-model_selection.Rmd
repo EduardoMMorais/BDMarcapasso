@@ -1,0 +1,627 @@
+---
+author: "Eduardo Yuki Yada"
+geometry: margin=1cm
+output: 
+  pdf_document:
+    template: latex-template.tex
+params:
+  outcome_column: readmission_30d
+  features_list: !r c()
+title: "`r paste('Model Selection -', params$outcome_column)`"
+---
+
+```{r, include=FALSE}
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- difftime(Sys.time(), now, units = "mins")
+      # return a character string to show the time
+      paste("Minutes to run:", round(res, 3))
+    }
+  }
+}))
+
+knitr::opts_chunk$set(
+  warning = F,
+  message = F,
+  time_it = TRUE
+)
+```
+
+# Imports
+
+```{r warning=F, message=F}
+library(tidyverse)
+library(yaml)
+library(tidymodels)
+library(usemodels) 
+library(vip)
+library(bonsai)
+library(lightgbm)
+library(caret)
+```
+
+# Loading data
+
+```{r}
+load('../dataset/processed_data.RData') 
+load('../dataset/processed_dictionary.RData') 
+
+columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
+
+outcome_column <- params$outcome_column
+features_list <- params$features_list
+
+df <- mutate(df, across(where(is.character), as.factor))
+```
+
+# Eligible features
+
+```{r}
+eligible_columns = df_names %>%
+  filter(momento.aquisicao == 'Admissão t0') %>%
+  .$variable.name
+
+exception_columns = c('death_intraop', 'death_intraop_1')
+
+correlated_columns = c('year_procedure_1', # com year_adm_t0
+                       'age_surgery_1', # com age
+                       'admission_t0', # com admission_pre_t0_count
+                       'atb', # com meds_antimicrobianos
+                       'classe_meds_cardio_qtde', # com classe_meds_qtde
+                       'suporte_hemod' # com proced_invasivos_qtde
+                       )
+
+eligible_features = eligible_columns %>%
+  base::intersect(c(columns_list$categorical_columns, columns_list$numerical_columns)) %>%
+  setdiff(c(exception_columns, correlated_columns))
+
+if (is.null(features_list)) {
+  features = eligible_features
+} else {
+  features = base::intersect(eligible_features, features_list)
+}
+
+gluedown::md_order(features, seq = TRUE, pad = TRUE)
+```
+
+# Train test split (70%/30%)
+
+```{r}
+set.seed(42)
+
+if (outcome_column == 'readmission_30d') {
+  df_split <- readRDS("../dataset/split_object.rds")
+} else {
+  df_split <- initial_split(df, prop = .7, strata = all_of(outcome_column))
+}
+
+df_train <- training(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
+df_test <- testing(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
+```
+
+# Global parameters
+
+```{r}
+k = 4 # Number of folds for cross validation
+grid_size = 10 # Number of parameter combination to tune on each model
+
+set.seed(234)
+df_folds <- vfold_cv(df_train, v = k,
+                     strata = all_of(outcome_column))
+```
+
+# Functions
+
+```{r}
+validation = function(model_fit, new_data, plot=TRUE) {
+  library(pROC)
+  library(caret)
+  
+  test_predictions_prob <-
+    predict(model_fit, new_data = new_data, type = "prob") %>%
+    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
+    .$`1`
+  
+  pROC_obj <- roc(
+    new_data[[outcome_column]],
+    test_predictions_prob, 
+    direction = "<",
+    levels = c(0, 1),
+    smoothed = TRUE,
+    ci = TRUE,
+    ci.alpha = 0.9,
+    stratified = FALSE,
+    plot = plot,
+    auc.polygon = TRUE,
+    max.auc.polygon = TRUE,
+    grid = TRUE,
+    print.auc = TRUE,
+    show.thres = TRUE
+  )
+  
+  test_predictions_class <-
+    predict(model_fit, new_data = new_data, type = "class") %>%
+    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
+    .$class
+  
+  conf_matrix <- table(test_predictions_class, new_data[[outcome_column]])
+  
+  if (plot) {
+    sens.ci <- ci.se(pROC_obj)
+    plot(sens.ci, type = "shape", col = "lightblue")
+    plot(sens.ci, type = "bars")
+    
+    confusionMatrix(conf_matrix) %>% print
+  }
+  
+  return(pROC_obj)
+}
+```
+
+# Boosted Tree (XGBoost)
+
+```{r}
+xgboost_recipe <-
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>%
+  step_novel(all_nominal_predictors()) %>%
+  step_unknown(all_nominal_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>%
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_zv(all_predictors())
+
+xgboost_spec <- boost_tree(
+  mtry = tune(),
+  trees = tune(),
+  min_n = tune(),
+  tree_depth = tune(),
+  learn_rate = tune(),
+  loss_reduction = tune()
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("classification")
+
+xgboost_grid <- grid_latin_hypercube(
+  finalize(mtry(), df_train),
+  dials::trees(range = c(100L, 300L)),
+  min_n(),
+  tree_depth(),
+  learn_rate(),
+  loss_reduction(),
+  size = grid_size
+)
+
+xgboost_workflow <-
+  workflow() %>%
+  add_recipe(xgboost_recipe) %>%
+  add_model(xgboost_spec)
+
+xgboost_tune <-
+  xgboost_workflow %>%
+  tune_grid(resamples = df_folds,
+            grid = xgboost_grid)
+
+xgboost_tune %>%
+  show_best("roc_auc")
+
+best_xgboost <- xgboost_tune %>%
+  select_best("roc_auc")
+
+xgboost_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "roc_auc") %>%
+  select(mean, mtry:trees) %>%
+  pivot_longer(mtry:trees,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "AUC")
+
+final_xgboost_workflow <-
+  xgboost_workflow %>%
+  finalize_workflow(best_xgboost)
+
+last_xgboost_fit <-
+  final_xgboost_workflow %>%
+  last_fit(df_split)
+
+final_xgboost_fit <- extract_workflow(last_xgboost_fit)
+
+xgboost_auc <- validation(final_xgboost_fit, df_test)
+
+final_xgboost_fit %>%
+  fit(data = df_train) %>%
+  extract_fit_parsnip() %>%
+  vip(geom = "point")
+
+xgboost_parameters <- xgboost_tune %>%
+  show_best("roc_auc", n = 1) %>%
+  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
+  as.list
+
+saveRDS(
+  xgboost_parameters,
+  file = sprintf(
+    "../EDA/auxiliar/model_selection/hyperparameters/xgboost_%s.rds",
+    outcome_column
+  )
+)
+```
+
+# Boosted Tree (LightGBM)
+
+```{r}
+lightgbm_recipe <-
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>%
+  step_novel(all_nominal_predictors()) %>%
+  step_unknown(all_nominal_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>%
+  step_impute_mean(all_numeric_predictors()) %>%
+  step_zv(all_predictors())
+
+lightgbm_spec <- boost_tree(
+  mtry = tune(),
+  trees = tune(),
+  min_n = tune(),
+  tree_depth = tune(),
+  learn_rate = tune(),
+  loss_reduction = tune(),
+  sample_size = 1
+) %>%
+  set_engine("lightgbm") %>%
+  set_mode("classification")
+
+lightgbm_grid <- grid_latin_hypercube(
+  finalize(mtry(), df_train),
+  dials::trees(range = c(100L, 300L)),
+  min_n(),
+  tree_depth(),
+  learn_rate(),
+  loss_reduction(),
+  size = grid_size
+)
+
+lightgbm_workflow <-
+  workflow() %>%
+  add_recipe(lightgbm_recipe) %>%
+  add_model(lightgbm_spec)
+
+lightgbm_tune <-
+  lightgbm_workflow %>%
+  tune_grid(resamples = df_folds,
+            grid = lightgbm_grid)
+
+lightgbm_tune %>%
+  show_best("roc_auc")
+
+best_lightgbm <- lightgbm_tune %>%
+  select_best("roc_auc")
+
+lightgbm_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "roc_auc") %>%
+  select(mean, mtry:tree_depth) %>%
+  pivot_longer(mtry:tree_depth,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "AUC")
+
+final_lightgbm_workflow <-
+  lightgbm_workflow %>%
+  finalize_workflow(best_lightgbm)
+
+last_lightgbm_fit <-
+  final_lightgbm_workflow %>%
+  last_fit(df_split)
+
+final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
+
+lightgbm_auc <- validation(final_lightgbm_fit, df_test)
+
+lightgbm_parameters <- lightgbm_tune %>%
+  show_best("roc_auc", n=1) %>%
+  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
+  as.list
+
+saveRDS(
+  lightgbm_parameters,
+  file = sprintf(
+    "../EDA/auxiliar/model_selection/hyperparameters/lightgbm_%s.rds",
+    outcome_column
+  )
+)
+```
+
+# GLM
+
+```{r}
+glmnet_recipe <- 
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
+  step_novel(all_nominal_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>% 
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_zv(all_predictors()) %>%
+  step_normalize(all_numeric_predictors()) 
+
+glmnet_spec <- 
+  logistic_reg(penalty = 0) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet") 
+
+glmnet_workflow <- 
+  workflow() %>% 
+  add_recipe(glmnet_recipe) %>% 
+  add_model(glmnet_spec) 
+
+glm_fit <- glmnet_workflow %>% 
+  fit(df_train)
+
+glm_auc = validation(glm_fit, df_test)
+```
+
+# Decision Tree
+
+```{r results=F}
+tree_recipe <- 
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
+  step_novel(all_nominal_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>% 
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_zv(all_predictors()) 
+
+tree_spec <-
+  decision_tree(cost_complexity = tune(),
+                tree_depth = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("rpart") 
+
+tree_grid <- grid_latin_hypercube(cost_complexity(),
+                                  tree_depth(),
+                                  size = grid_size)
+
+tree_workflow <- 
+  workflow() %>% 
+  add_recipe(tree_recipe) %>% 
+  add_model(tree_spec) 
+
+tree_tune <- 
+  tree_workflow %>%
+  tune_grid(resamples = df_folds,
+            grid = tree_grid)
+
+tree_tune %>% 
+  collect_metrics()
+
+autoplot(tree_tune, metric = "roc_auc")
+
+tree_tune %>%
+  show_best("roc_auc")
+
+best_tree <- tree_tune %>%
+  select_best("roc_auc")
+
+final_tree_workflow <- 
+  tree_workflow %>% 
+  finalize_workflow(best_tree)
+
+last_tree_fit <- 
+  final_tree_workflow %>%
+  last_fit(df_split) 
+
+final_tree_fit <- extract_workflow(last_tree_fit)
+
+tree_auc = validation(final_tree_fit, df_test)
+
+if (tree_auc$auc > 0.55){
+  final_tree_fit %>% 
+    extract_fit_parsnip() %>% 
+    vip() 
+}
+```
+
+# Random Forest
+
+```{r results=F}
+rf_recipe <- 
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>% 
+  step_novel(all_nominal_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>% 
+  step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_zv(all_predictors()) %>%
+  step_impute_mean(all_numeric_predictors())
+
+rf_spec <-
+  rand_forest(mtry = tune(),
+              trees = 100,
+              min_n = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("ranger") 
+
+rf_grid <- grid_latin_hypercube(mtry(range = c(1, 10)),
+                                min_n(),
+                                size = grid_size)
+
+rf_workflow <- 
+  workflow() %>% 
+  add_recipe(rf_recipe) %>% 
+  add_model(rf_spec) 
+
+rf_tune <- 
+  rf_workflow %>%
+  tune_grid(resamples = df_folds,
+            grid = rf_grid)
+
+rf_tune %>% 
+  collect_metrics()
+
+autoplot(rf_tune, metric = "roc_auc")
+
+rf_tune %>%
+  show_best("roc_auc")
+
+best_rf <- rf_tune %>%
+  select_best("roc_auc")
+
+final_rf_workflow <- 
+  rf_workflow %>% 
+  finalize_workflow(best_rf)
+
+last_rf_fit <- 
+  final_rf_workflow %>%
+  last_fit(df_split) 
+
+final_rf_fit <- extract_workflow(last_rf_fit)
+
+rf_auc <- validation(final_rf_fit, df_test)
+```
+
+# KNN
+
+```{r}
+# knn_recipe <-
+#   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>%
+#   step_novel(all_nominal_predictors()) %>% 
+#   step_unknown(all_nominal_predictors()) %>% 
+#   step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>% 
+#   step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+#   step_zv(all_predictors()) %>%
+#   step_impute_mean(all_numeric_predictors())
+# 
+# knn_spec <-
+#   nearest_neighbor(neighbors = tune(),
+#                    weight_func = tune(),
+#                    dist_power = tune()) %>%
+#   set_mode("classification") %>%
+#   set_engine("kknn")
+# 
+# knn_grid <- grid_latin_hypercube(neighbors(),
+#                                  weight_func(),
+#                                  dist_power(),
+#                                  size = 5)
+# 
+# knn_workflow <-
+#   workflow() %>%
+#   add_recipe(knn_recipe) %>%
+#   add_model(knn_spec)
+# 
+# knn_tune <-
+#   knn_workflow %>%
+#   tune_grid(resamples = df_folds,
+#             grid = knn_grid)
+# 
+# knn_tune %>%
+#   collect_metrics()
+# 
+# autoplot(knn_tune, metric = "roc_auc")
+# 
+# knn_tune %>%
+#   show_best("roc_auc")
+# 
+# best_knn <- knn_tune %>%
+#   select_best("roc_auc")
+# 
+# final_knn_workflow <-
+#   knn_workflow %>%
+#   finalize_workflow(best_knn)
+# 
+# last_knn_fit <-
+#   final_knn_workflow %>%
+#   last_fit(df_split)
+# 
+# final_knn_fit <- extract_workflow(last_knn_fit)
+# 
+# knn_auc = validation(final_knn_fit, df_test)
+```
+
+# SVM
+
+```{r}
+# svm_recipe <-
+#   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula, data = df_train) %>%
+#   step_novel(all_nominal_predictors()) %>%
+#   step_unknown(all_nominal_predictors()) %>%
+#   step_other(all_nominal_predictors(), threshold = 0.05, other=".merged") %>%
+#   step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+#   step_zv(all_predictors()) %>%
+#   step_impute_mean(all_numeric_predictors())
+# 
+# svm_spec <-
+#   svm_rbf(cost = tune(), rbf_sigma = tune()) %>%
+#   set_mode("classification") %>%
+#   set_engine("kernlab")
+# 
+# svm_grid <- grid_latin_hypercube(cost(),
+#                                  rbf_sigma(),
+#                                  size = grid_size)
+# 
+# svm_workflow <-
+#   workflow() %>%
+#   add_recipe(svm_recipe) %>%
+#   add_model(svm_spec)
+# 
+# svm_tune <-
+#   svm_workflow %>%
+#   tune_grid(resamples = df_folds,
+#             grid = 5)
+# 
+# svm_tune %>%
+#   collect_metrics()
+# 
+# autoplot(svm_tune, metric = "roc_auc")
+# 
+# svm_tune %>%
+#   show_best("roc_auc")
+# 
+# best_svm <- svm_tune %>%
+#   select_best("roc_auc")
+# 
+# final_svm_workflow <-
+#   svm_workflow %>%
+#   finalize_workflow(best_svm)
+# 
+# last_svm_fit <-
+#   final_svm_workflow %>%
+#   last_fit(df_split)
+# 
+# final_svm_fit <- extract_workflow(last_svm_fit)
+# 
+# svm_auc = validation(final_svm_fit, df_test)
+```
+
+
+# Models Comparison
+
+```{r}
+df_auc <- tibble::tribble(
+  ~Model, ~`AUC`, ~`Lower Limit`, ~`Upper Limit`,
+  'XGBoost', as.numeric(xgboost_auc$auc), xgboost_auc$ci[1], xgboost_auc$ci[3],
+  'LightGBM', as.numeric(lightgbm_auc$auc), lightgbm_auc$ci[1], lightgbm_auc$ci[3],
+  'GLM', as.numeric(glm_auc$auc), glm_auc$ci[1], glm_auc$ci[3],
+  'Decision Tree', as.numeric(tree_auc$auc), tree_auc$ci[1], tree_auc$ci[3],
+  'Random Forest', as.numeric(rf_auc$auc), rf_auc$ci[1], rf_auc$ci[3]
+) %>% 
+  mutate(Target = outcome_column)
+
+df_auc %>%
+  ggplot(aes(x = Model, y = AUC, ymin = `Lower Limit`, ymax = `Upper Limit`)) + 
+    geom_point() + 
+    geom_errorbar()
+
+saveRDS(df_auc, sprintf("../EDA/auxiliar/model_selection/performance/%s.RData", outcome_column))
+```
+

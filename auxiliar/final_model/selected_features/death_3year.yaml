@@ -1,0 +1,17 @@
+- age
+- year_adm_t0
+- classe_meds_qtde
+- admission_pre_t0_count
+- ieca_bra
+- espironolactona
+- meds_antimicrobianos
+- icu_t0
+- education_level
+- diuretico
+- ecg
+- insuf_cardiaca
+- comorbidities_count
+- vasodilatador
+- equipe_multiprof
+- laboratorio
+- meds_cardiovasc_qtde
