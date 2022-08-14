@@ -60,6 +60,16 @@ features_list <- params$features_list
 df <- mutate(df, across(where(is.character), as.factor))
 ```
 
+```{r}
+dir.create(file.path("./auxiliar/model_selection/hyperparameters/"),
+           showWarnings = FALSE, 
+           recursive = TRUE)
+
+dir.create(file.path("./auxiliar/model_selection/performance/"),
+           showWarnings = FALSE, 
+           recursive = TRUE)
+```
+
 # Eligible features
 
 ```{r}

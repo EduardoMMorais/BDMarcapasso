@@ -217,6 +217,8 @@ chisq.test(df[[outcome_column]],
 ```
 
 ```{r}
+dir.create(file.path("./auxiliar/significant_columns/"), showWarnings = FALSE)
+
 saveRDS(significant_cat_cols,
         file = sprintf("./auxiliar/significant_columns/categorical_%s.rds", outcome_column))
 

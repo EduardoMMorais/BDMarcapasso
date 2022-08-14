@@ -48,6 +48,8 @@ library(Matrix)
 library(mltools)
 library(bonsai)
 library(lightgbm)
+
+select <- dplyr::select
 ```
 
 # Loading data
@@ -63,6 +65,20 @@ features_list <- params$features_list
 
 df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
 df <- mutate(df, across(where(is.character), as.factor))
+```
+
+```{r}
+dir.create(file.path("./auxiliar/final_model/hyperparameters/"),
+           showWarnings = FALSE, 
+           recursive = TRUE)
+
+dir.create(file.path("./auxiliar/final_model/performance/"),
+           showWarnings = FALSE, 
+           recursive = TRUE)
+
+dir.create(file.path("./auxiliar/final_model/selected_features/"),
+           showWarnings = FALSE, 
+           recursive = TRUE)
 ```
 
 # Eligible features
@@ -110,8 +126,8 @@ if (outcome_column == 'readmission_30d') {
   df_split <- initial_split(df, prop = .7, strata = all_of(outcome_column))
 }
 
-df_train <- training(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
-df_test <- testing(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
+df_train <- training(df_split) %>% select(all_of(c(features, outcome_column)))
+df_test <- testing(df_split) %>% select(all_of(c(features, outcome_column)))
 ```
 
 # Global parameters
@@ -132,7 +148,8 @@ max_auc_loss <- 0.01
 ```{r}
 niceFormatting <- function(df, caption="", digits = 2, font_size = NULL){
   df %>%
-    kbl(booktabs = T, longtable = T, caption = caption, digits = digits, format = "latex") %>%
+    kbl(booktabs = T, longtable = T, caption = caption,
+        digits = digits, format = "latex") %>%
     kable_styling(font_size = font_size,
                   latex_options = c("striped", "HOLD_position", "repeat_header"))
 }
@@ -219,11 +236,15 @@ model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
 
   feature_importance <- lgb.importance(raw_model, percentage = TRUE)
 
-  return(list(cv_auc = collect_metrics(model_fit_rs) %>% filter(.metric == 'roc_auc') %>% .$mean,
-              importance = feature_importance,
-              auc = as.numeric(model_auc$auc),
-              auc_lower = model_auc$ci[1],
-              auc_upper = model_auc$ci[3]))
+  return(
+    list(
+      cv_auc = collect_metrics(model_fit_rs) %>% filter(.metric == 'roc_auc') %>% .$mean,
+      importance = feature_importance,
+      auc = as.numeric(model_auc$auc),
+      auc_lower = model_auc$ci[1],
+      auc_upper = model_auc$ci[3]
+    )
+  )
 }
 ```
 
@@ -340,7 +361,7 @@ gluedown::md_order(selected_features, seq = TRUE, pad = TRUE)
 ```{r}
 lightgbm_recipe <-
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
-         data = df_train %>% dplyr::select(all_of(c(selected_features, outcome_column)))) %>%
+         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
   step_novel(all_nominal_predictors()) %>%
   step_unknown(all_nominal_predictors()) %>%
   step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
