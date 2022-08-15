@@ -1,0 +1,16 @@
+- admission_pre_t0_count
+- age
+- meds_cardiovasc_qtde
+- icu_t0
+- year_adm_t0
+- classe_meds_qtde
+- metodos_graficos_qtde
+- laboratorio
+- diuretico
+- antiarritmico
+- meds_antimicrobianos
+- vasodilatador
+- estatina
+- reop_type_1
+- ieca_bra
+- equipe_multiprof

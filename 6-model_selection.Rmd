@@ -118,8 +118,8 @@ df_test <- testing(df_split) %>% dplyr::select(all_of(c(features, outcome_column
 # Global parameters
 
 ```{r}
-k = 4 # Number of folds for cross validation
-grid_size = 10 # Number of parameter combination to tune on each model
+k = 5 # Number of folds for cross validation
+grid_size = 15 # Number of parameter combination to tune on each model
 
 set.seed(234)
 df_folds <- vfold_cv(df_train, v = k,

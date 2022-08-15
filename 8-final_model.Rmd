@@ -133,7 +133,7 @@ df_test <- testing(df_split) %>% select(all_of(c(features, outcome_column)))
 # Global parameters
 
 ```{r}
-k <- 4 # Number of folds for cross validation
+k <- 5 # Number of folds for cross validation
 grid_size <- 50 # Number of parameter combination to tune on each model
 
 set.seed(234)
@@ -359,6 +359,199 @@ gluedown::md_order(selected_features, seq = TRUE, pad = TRUE)
 ```
 
 ```{r}
+# doParallel::registerDoParallel(8)
+```
+
+
+## Smote
+
+```{r}
+library(themis)
+
+lightgbm_recipe <-
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
+         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
+  step_novel(all_nominal_predictors()) %>%
+  step_unknown(all_nominal_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_impute_mean(all_numeric_predictors()) %>%
+  step_zv(all_predictors()) %>%
+  step_smote(!!sym(outcome_column))
+
+lightgbm_spec <- boost_tree(
+  mtry = tune(),
+  trees = tune(),
+  min_n = tune(),
+  tree_depth = tune(),
+  learn_rate = tune(),
+  loss_reduction = tune()
+) %>%
+  set_engine("lightgbm") %>%
+  set_mode("classification")
+
+lightgbm_grid <- grid_latin_hypercube(
+  finalize(mtry(),
+           df_train %>% dplyr::select(all_of(c(selected_features, outcome_column)))),
+  dials::trees(range = c(100L, 300L)),
+  min_n(),
+  tree_depth(),
+  learn_rate(),
+  loss_reduction(),
+  size = grid_size
+)
+
+lightgbm_workflow <-
+  workflow() %>%
+  add_recipe(lightgbm_recipe) %>%
+  add_model(lightgbm_spec)
+
+lightgbm_tune <-
+  lightgbm_workflow %>%
+  tune_grid(resamples = df_folds,
+            grid = lightgbm_grid)
+
+lightgbm_tune %>%
+  show_best("roc_auc") %>%
+  niceFormatting(digits = 5)
+
+best_lightgbm <- lightgbm_tune %>%
+  select_best("roc_auc")
+
+lightgbm_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "roc_auc") %>%
+  select(mean, mtry:tree_depth) %>%
+  pivot_longer(mtry:tree_depth,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "AUC")
+
+final_lightgbm_workflow <-
+  lightgbm_workflow %>%
+  finalize_workflow(best_lightgbm)
+
+last_lightgbm_fit <-
+  final_lightgbm_workflow %>%
+  last_fit(df_split)
+
+final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
+
+lightgbm_smote_auc <- validation(final_lightgbm_fit, df_test)
+
+lightgbm_parameters <- lightgbm_tune %>%
+  show_best("roc_auc", n = 1) %>%
+  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
+  as.list
+
+saveRDS(
+  lightgbm_parameters,
+  file = sprintf(
+    "./auxiliar/final_model/hyperparameters/lightgbm_smote_%s.rds",
+    outcome_column
+  )
+)
+```
+
+## Upsample
+
+```{r}
+lightgbm_recipe <-
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
+         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
+  step_novel(all_nominal_predictors()) %>%
+  step_unknown(all_nominal_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
+  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
+  step_impute_mean(all_numeric_predictors()) %>%
+  step_zv(all_predictors()) %>%
+  step_upsample(!!sym(outcome_column))
+
+lightgbm_spec <- boost_tree(
+  mtry = tune(),
+  trees = tune(),
+  min_n = tune(),
+  tree_depth = tune(),
+  learn_rate = tune(),
+  loss_reduction = tune()
+) %>%
+  set_engine("lightgbm") %>%
+  set_mode("classification")
+
+lightgbm_grid <- grid_latin_hypercube(
+  finalize(mtry(),
+           df_train %>% dplyr::select(all_of(c(selected_features, outcome_column)))),
+  dials::trees(range = c(100L, 300L)),
+  min_n(),
+  tree_depth(),
+  learn_rate(),
+  loss_reduction(),
+  size = grid_size
+)
+
+lightgbm_workflow <-
+  workflow() %>%
+  add_recipe(lightgbm_recipe) %>%
+  add_model(lightgbm_spec)
+
+lightgbm_tune <-
+  lightgbm_workflow %>%
+  tune_grid(resamples = df_folds,
+            grid = lightgbm_grid)
+
+lightgbm_tune %>%
+  show_best("roc_auc") %>%
+  niceFormatting(digits = 5)
+
+best_lightgbm <- lightgbm_tune %>%
+  select_best("roc_auc")
+
+lightgbm_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "roc_auc") %>%
+  select(mean, mtry:tree_depth) %>%
+  pivot_longer(mtry:tree_depth,
+               values_to = "value",
+               names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "AUC")
+
+final_lightgbm_workflow <-
+  lightgbm_workflow %>%
+  finalize_workflow(best_lightgbm)
+
+last_lightgbm_fit <-
+  final_lightgbm_workflow %>%
+  last_fit(df_split)
+
+final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
+
+lightgbm_upsample_auc <- validation(final_lightgbm_fit, df_test)
+
+lightgbm_parameters <- lightgbm_tune %>%
+  show_best("roc_auc", n = 1) %>%
+  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
+  as.list
+
+saveRDS(
+  lightgbm_parameters,
+  file = sprintf(
+    "./auxiliar/final_model/hyperparameters/lightgbm_upsample_%s.rds",
+    outcome_column
+  )
+)
+```
+
+## Standard
+
+```{r}
 lightgbm_recipe <-
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
          data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
@@ -491,15 +684,16 @@ df_auc <- tibble::tribble(
   'Full Model', full_model$auc, full_model$auc_lower, full_model$auc_upper,
   'Trimmed Model', trimmed_model$auc, trimmed_model$auc_lower, trimmed_model$auc_upper,
   'Feature Selected Model', feature_selected_model$auc, feature_selected_model$auc_lower, feature_selected_model$auc_upper,
-  'Tuned Model', as.numeric(lightgbm_auc$auc), lightgbm_auc$ci[1], lightgbm_auc$ci[3],
-  # 'Oversampled Model', as.numeric(oversampled_model$auc), oversampled_model$auc_lower, oversampled_model$auc_upper,
-  # 'Undersampled Model', as.numeric(undersampled_model$auc), undersampled_model$auc_lower, undersampled_model$auc_upper
+  'Tuned Standard Model', as.numeric(lightgbm_auc$auc), lightgbm_auc$ci[1], lightgbm_auc$ci[3],
+  'Tuned Smote Model', as.numeric(lightgbm_smote_auc$auc), lightgbm_smote_auc$ci[1], lightgbm_smote_auc$ci[3],
+  'Tuned Upsample Model', as.numeric(lightgbm_upsample_auc$auc), lightgbm_upsample_auc$ci[1], lightgbm_upsample_auc$ci[3]
+
 ) %>% 
   mutate(Target = outcome_column,
          Model = factor(Model, 
                         levels = c('Full Model', 'Trimmed Model',
-                                   'Feature Selected Model', 'Tuned Model',
-                                   'Oversampled Model', 'Undersampled Model')))
+                                   'Feature Selected Model', 'Tuned Standard Model',
+                                   'Tuned Smote Model', 'Tuned Upsample Model')))
 
 df_auc %>%
   ggplot(aes(
@@ -510,7 +704,8 @@ df_auc %>%
   )) +
   geom_point() +
   geom_errorbar() +
-  labs(title = outcome_column)
+  labs(title = outcome_column) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 saveRDS(df_auc, sprintf("./auxiliar/final_model/performance/%s.RData", outcome_column))
 ```
