@@ -85,7 +85,7 @@ eligible_columns = df_names %>%
   filter(momento.aquisicao == 'Admissão t0') %>%
   .$variable.name
 
-exception_columns = c('death_intraop', 'death_intraop_1')
+exception_columns = c('death_intraop', 'death_intraop_1', 'disch_outcomes_t0')
 
 correlated_columns = c('year_procedure_1', # com year_adm_t0
                        'age_surgery_1', # com age

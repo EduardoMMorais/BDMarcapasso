@@ -97,7 +97,7 @@ eligible_columns <- df_names %>%
   filter(momento.aquisicao == 'Admissão t0') %>%
   .$variable.name
 
-exception_columns <- c('death_intraop', 'death_intraop_1')
+exception_columns <- c('death_intraop', 'death_intraop_1', 'disch_outcomes_t0')
 
 correlated_columns <- c('year_procedure_1', # com year_adm_t0
                        'age_surgery_1', # com age
@@ -247,10 +247,13 @@ model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
   raw_model <- parsnip::extract_fit_engine(model_fit)
 
   feature_importance <- lgb.importance(raw_model, percentage = TRUE)
-
+  
+  cv_results <- collect_metrics(model_fit_rs) %>% filter(.metric == 'roc_auc') 
+  
   return(
     list(
-      cv_auc = collect_metrics(model_fit_rs) %>% filter(.metric == 'roc_auc') %>% .$mean,
+      cv_auc =  cv_results$mean,
+      cv_auc_std_err = cv_results$std_err,
       importance = feature_importance,
       auc = as.numeric(model_auc$auc),
       auc_lower = model_auc$ci[1],
@@ -297,8 +300,8 @@ sprintf('Trimmed Model Test AUC: %.3f' ,trimmed_model$auc)
 
 ```{r}
 selection_results <- tibble::tribble(
-  ~`Number of Features`, ~`AUC Loss`, ~`Least Important Feature`,
-  length(features), 0, tail(full_model$importance$Feature, 1)
+  ~`Number of Features`, ~`CV AUC`, ~`CV AUC Std Error`, ~`AUC Loss`, ~`Least Important Feature`,
+  length(features), full_model$cv_auc, full_model$cv_auc_std_err, 0, tail(full_model$importance$Feature, 1)
 )
 
 if (full_model$cv_auc - trimmed_model$cv_auc < max_auc_loss) {
@@ -309,6 +312,8 @@ if (full_model$cv_auc - trimmed_model$cv_auc < max_auc_loss) {
   
   selection_results <- selection_results %>%
     add_row(`Number of Features` = length(trimmed_features),
+            `CV AUC` = current_model$cv_auc,
+            `CV AUC Std Error` = current_model$cv_auc_std_err,
             `AUC Loss` = current_auc_loss,
             `Least Important Feature` = current_least_important)
 } else {
@@ -330,6 +335,8 @@ while (current_auc_loss < max_auc_loss) {
   
   selection_results <- selection_results %>%
     add_row(`Number of Features` = length(current_features),
+            `CV AUC` = current_model$cv_auc,
+            `CV AUC Std Error` = current_model$cv_auc_std_err,
             `AUC Loss` = current_auc_loss,
             `Least Important Feature` = current_least_important)
   
@@ -356,6 +363,18 @@ feature_selected_model <- model_fit_wf(df_train, selected_features,
 
 sprintf('Selected Model CV Train AUC: %.3f', feature_selected_model$cv_auc)
 sprintf('Selected Model Test AUC: %.3f', feature_selected_model$auc)
+
+ selection_results <- selection_results %>%
+  filter(`Number of Features` < length(features)) %>%
+  mutate(`Features Removed` = length(features) - `Number of Features`,
+         `CV AUC Low` = `CV AUC` - `CV AUC Std Error`,
+         `CV AUC High` = `CV AUC` + `CV AUC Std Error`)
+
+selection_results %>%
+  ggplot(aes(x = `Features Removed`, y = `CV AUC`,
+             ymin = `CV AUC Low`, ymax = `CV AUC High`)) + 
+  geom_line() + 
+  geom_ribbon(alpha = .3) # Add auc threshold
 
 selection_results %>%
   filter(`Number of Features` < length(features)) %>%
