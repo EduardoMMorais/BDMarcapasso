@@ -121,6 +121,7 @@ addpercentage <- function(df, horizontal = FALSE){
 
 ```{r results = 'asis', message = F, warning = F}
 transpose_columns <- c()
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.character)
 
 for (column in columns_list$categorical_columns){
   if (length(unique(df[[column]])) > 5) next

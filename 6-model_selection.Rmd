@@ -33,6 +33,13 @@ knitr::opts_chunk$set(
 )
 ```
 
+# Global parameters
+
+```{r}
+k = 5 # Number of folds for cross validation
+grid_size = 15 # Number of parameter combination to tune on each model
+```
+
 # Imports
 
 ```{r warning=F, message=F}
@@ -44,6 +51,7 @@ library(vip)
 library(bonsai)
 library(lightgbm)
 library(caret)
+library(pROC)
 ```
 
 # Loading data
@@ -113,15 +121,7 @@ if (outcome_column == 'readmission_30d') {
 
 df_train <- training(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
 df_test <- testing(df_split) %>% dplyr::select(all_of(c(features, outcome_column)))
-```
 
-# Global parameters
-
-```{r}
-k = 5 # Number of folds for cross validation
-grid_size = 15 # Number of parameter combination to tune on each model
-
-set.seed(234)
 df_folds <- vfold_cv(df_train, v = k,
                      strata = all_of(outcome_column))
 ```
@@ -130,9 +130,6 @@ df_folds <- vfold_cv(df_train, v = k,
 
 ```{r}
 validation = function(model_fit, new_data, plot=TRUE) {
-  library(pROC)
-  library(caret)
-  
   test_predictions_prob <-
     predict(model_fit, new_data = new_data, type = "prob") %>%
     rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
@@ -155,21 +152,37 @@ validation = function(model_fit, new_data, plot=TRUE) {
     show.thres = TRUE
   )
   
-  test_predictions_class <-
-    predict(model_fit, new_data = new_data, type = "class") %>%
-    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
-    .$class
+  proc_coords <- coords(
+    pROC_obj,
+    x = "best",
+    best.method = "youden",
+    ret = c(
+      "threshold",
+      "sensitivity",
+      "specificity"
+    )
+  )
   
-  conf_matrix <- table(test_predictions_class, new_data[[outcome_column]])
+  test_predictions_prob <-
+    predict(model_fit, new_data = new_data, type = "prob") %>%
+    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
+    .$`1`
+  
+  test_predictions_class <- ifelse(test_predictions_prob > proc_coords$threshold, 
+                                   1, 0)
+  
+  conf_matrix <- table(data = test_predictions_class,
+                       reference = new_data[[outcome_column]])
   
   if (plot) {
     sens.ci <- ci.se(pROC_obj)
-    plot(sens.ci, type = "shape", col = "lightblue")
+    plot(sens.ci, type = "shape", col = "lightblue", print.thres = "best")
     plot(sens.ci, type = "bars")
     
-    confusionMatrix(conf_matrix) %>% print
+    print(sprintf("Optimal Threshold: %.2f", proc_coords$threshold))
+    caret::confusionMatrix(conf_matrix) %>% print
   }
-  
+
   return(pROC_obj)
 }
 ```
@@ -341,7 +354,7 @@ final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
 lightgbm_auc <- validation(final_lightgbm_fit, df_test)
 
 lightgbm_parameters <- lightgbm_tune %>%
-  show_best("roc_auc", n=1) %>%
+  show_best("roc_auc", n = 1) %>%
   select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
   as.list
 

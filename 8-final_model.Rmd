@@ -32,6 +32,14 @@ knitr::opts_chunk$set(
 )
 ```
 
+# Global parameters
+
+```{r}
+k <- 5 # Number of folds for cross validation
+grid_size <- 50 # Number of parameter combination to tune on each model
+max_auc_loss <- 0.005 # Max accepted loss of AUC for reducing num of features
+```
+
 # Imports
 
 ```{r warning=F, message=F}
@@ -41,13 +49,14 @@ library(tidymodels)
 library(usemodels) 
 library(vip)
 library(kableExtra)
-
 library(SHAPforxgboost)
 library(xgboost)
 library(Matrix)
 library(mltools)
 library(bonsai)
 library(lightgbm)
+library(pROC)
+library(caret)
 
 select <- dplyr::select
 ```
@@ -128,19 +137,9 @@ if (outcome_column == 'readmission_30d') {
 
 df_train <- training(df_split) %>% select(all_of(c(features, outcome_column)))
 df_test <- testing(df_split) %>% select(all_of(c(features, outcome_column)))
-```
 
-# Global parameters
-
-```{r}
-k <- 5 # Number of folds for cross validation
-grid_size <- 50 # Number of parameter combination to tune on each model
-
-set.seed(234)
 df_folds <- vfold_cv(df_train, v = k,
                      strata = all_of(outcome_column))
-
-max_auc_loss <- 0.01
 ```
 
 # Functions
@@ -157,9 +156,6 @@ niceFormatting <- function(df, caption="", digits = 2, font_size = NULL){
 
 ```{r}
 validation = function(model_fit, new_data, plot=TRUE) {
-  library(pROC)
-  library(caret)
-  
   test_predictions_prob <-
     predict(model_fit, new_data = new_data, type = "prob") %>%
     rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
@@ -182,21 +178,37 @@ validation = function(model_fit, new_data, plot=TRUE) {
     show.thres = TRUE
   )
   
-  test_predictions_class <-
-    predict(model_fit, new_data = new_data, type = "class") %>%
-    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
-    .$class
+  proc_coords <- coords(
+    pROC_obj,
+    x = "best",
+    best.method = "youden",
+    ret = c(
+      "threshold",
+      "sensitivity",
+      "specificity"
+    )
+  )
   
-  conf_matrix <- table(test_predictions_class, new_data[[outcome_column]])
+  test_predictions_prob <-
+    predict(model_fit, new_data = new_data, type = "prob") %>%
+    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
+    .$`1`
+  
+  test_predictions_class <- ifelse(test_predictions_prob > proc_coords$threshold, 
+                                   1, 0)
+  
+  conf_matrix <- table(data = test_predictions_class,
+                       reference = new_data[[outcome_column]])
   
   if (plot) {
     sens.ci <- ci.se(pROC_obj)
-    plot(sens.ci, type = "shape", col = "lightblue")
+    plot(sens.ci, type = "shape", col = "lightblue", print.thres = "best")
     plot(sens.ci, type = "bars")
     
-    confusionMatrix(conf_matrix) %>% print
+    print(sprintf("Optimal Threshold: %.2f", proc_coords$threshold))
+    caret::confusionMatrix(conf_matrix) %>% print
   }
-  
+
   return(pROC_obj)
 }
 ```
@@ -256,6 +268,8 @@ hyperparameters <- readRDS(
   )
 )
 
+hyperparameters$sample_size <- 1 
+
 full_model <- model_fit_wf(df_train, features, outcome_column, hyperparameters)
 
 sprintf('Full Model CV Train AUC: %.3f' ,full_model$cv_auc)
@@ -308,7 +322,7 @@ while (current_auc_loss < max_auc_loss) {
   last_feature_droped <- current_least_important
   
   current_features <- setdiff(current_features, current_least_important)
-  hyperparameters$mtry = min(hyperparameters$mtry, length(current_features))
+  hyperparameters$mtry <- min(hyperparameters$mtry, length(current_features))
   current_model <- model_fit_wf(df_train, current_features, outcome_column, hyperparameters)
   current_least_important <- tail(current_model$importance$Feature, 1)
   
@@ -340,8 +354,8 @@ close(con)
 feature_selected_model <- model_fit_wf(df_train, selected_features,
                                        outcome_column, hyperparameters)
 
-sprintf('Trimmed Model CV Train AUC: %.3f', feature_selected_model$cv_auc)
-sprintf('Trimmed Model Test AUC: %.3f', feature_selected_model$auc)
+sprintf('Selected Model CV Train AUC: %.3f', feature_selected_model$cv_auc)
+sprintf('Selected Model Test AUC: %.3f', feature_selected_model$auc)
 
 selection_results %>%
   filter(`Number of Features` < length(features)) %>%
@@ -358,14 +372,9 @@ Selected features:
 gluedown::md_order(selected_features, seq = TRUE, pad = TRUE)
 ```
 
-```{r}
-# doParallel::registerDoParallel(8)
-```
-
-
 ## Smote
 
-```{r}
+```{r eval=F}
 library(themis)
 
 lightgbm_recipe <-
@@ -385,7 +394,8 @@ lightgbm_spec <- boost_tree(
   min_n = tune(),
   tree_depth = tune(),
   learn_rate = tune(),
-  loss_reduction = tune()
+  loss_reduction = tune(),
+  sample_size = 1
 ) %>%
   set_engine("lightgbm") %>%
   set_mode("classification")
@@ -459,7 +469,7 @@ saveRDS(
 
 ## Upsample
 
-```{r}
+```{r eval=F}
 lightgbm_recipe <-
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
          data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
@@ -477,7 +487,8 @@ lightgbm_spec <- boost_tree(
   min_n = tune(),
   tree_depth = tune(),
   learn_rate = tune(),
-  loss_reduction = tune()
+  loss_reduction = tune(),
+  sample_size = 1
 ) %>%
   set_engine("lightgbm") %>%
   set_mode("classification")
@@ -568,14 +579,15 @@ lightgbm_spec <- boost_tree(
   min_n = tune(),
   tree_depth = tune(),
   learn_rate = tune(),
-  loss_reduction = tune()
+  loss_reduction = tune(),
+  sample_size = 1.0
 ) %>%
   set_engine("lightgbm") %>%
   set_mode("classification")
 
 lightgbm_grid <- grid_latin_hypercube(
   finalize(mtry(),
-           df_train %>% dplyr::select(all_of(c(selected_features, outcome_column)))),
+           df_train %>% select(all_of(c(selected_features, outcome_column)))),
   dials::trees(range = c(100L, 300L)),
   min_n(),
   tree_depth(),
@@ -680,20 +692,17 @@ lightgbm_model$params
 
 ```{r}
 df_auc <- tibble::tribble(
-  ~Model, ~`AUC`, ~`Lower Limit`, ~`Upper Limit`,
-  'Full Model', full_model$auc, full_model$auc_lower, full_model$auc_upper,
-  'Trimmed Model', trimmed_model$auc, trimmed_model$auc_lower, trimmed_model$auc_upper,
-  'Feature Selected Model', feature_selected_model$auc, feature_selected_model$auc_lower, feature_selected_model$auc_upper,
-  'Tuned Standard Model', as.numeric(lightgbm_auc$auc), lightgbm_auc$ci[1], lightgbm_auc$ci[3],
-  'Tuned Smote Model', as.numeric(lightgbm_smote_auc$auc), lightgbm_smote_auc$ci[1], lightgbm_smote_auc$ci[3],
-  'Tuned Upsample Model', as.numeric(lightgbm_upsample_auc$auc), lightgbm_upsample_auc$ci[1], lightgbm_upsample_auc$ci[3]
+  ~Model, ~`AUC`, ~`Lower Limit`, ~`Upper Limit`, ~`Features`,
+  'Full Model', full_model$auc, full_model$auc_lower, full_model$auc_upper, length(features),
+  'Trimmed Model', trimmed_model$auc, trimmed_model$auc_lower, trimmed_model$auc_upper, length(trimmed_features),
+  'Feature Selected Model', feature_selected_model$auc, feature_selected_model$auc_lower, feature_selected_model$auc_upper, length(selected_features),
+  'Tuned Standard Model', as.numeric(lightgbm_auc$auc), lightgbm_auc$ci[1], lightgbm_auc$ci[3], length(selected_features)
+  # 'Tuned Smote Model', as.numeric(lightgbm_smote_auc$auc), lightgbm_smote_auc$ci[1], lightgbm_smote_auc$ci[3],
+  # 'Tuned Upsample Model', as.numeric(lightgbm_upsample_auc$auc), lightgbm_upsample_auc$ci[1], lightgbm_upsample_auc$ci[3]
 
 ) %>% 
   mutate(Target = outcome_column,
-         Model = factor(Model, 
-                        levels = c('Full Model', 'Trimmed Model',
-                                   'Feature Selected Model', 'Tuned Standard Model',
-                                   'Tuned Smote Model', 'Tuned Upsample Model')))
+         Model = fct_reorder(paste0(Model, "-", Features), -Features))
 
 df_auc %>%
   ggplot(aes(
