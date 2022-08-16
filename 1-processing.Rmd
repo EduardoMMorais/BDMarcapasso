@@ -132,6 +132,19 @@ df <- df %>%
          death_1year = death_30days + death_180days + death_1year,
          death_180days = death_30days + death_180days)
 
+
+df_names <- df_names %>%
+  mutate(field.label = case_when(variable.name == 'readmission_30d' ~ 'Readmissão em até 30 dias',
+                                 variable.name == 'readmission_60d' ~ 'Readmissão em até 60 dias',
+                                 variable.name == 'readmission_180d' ~ 'Readmissão em até 180 dias',
+                                 variable.name == 'readmission_1year' ~ 'Readmissão em até 1 ano',
+                                 variable.name == 'death_30days' ~ 'Óbito em até 30 dias após a alta T0',
+                                 variable.name == 'death_180days' ~ 'Óbito em até 180 dias após a alta T0',
+                                 variable.name == 'death_1year' ~ 'Óbito em até 1 ano após a alta T0',
+                                 variable.name == 'death_2year' ~ 'Óbito em até 2 anos após a alta T0',
+                                 variable.name == 'death_3year' ~ 'Óbito em até 3 anos após a alta T0',
+                                 TRUE ~ field.label)) 
+
 df[outcome_columns] <- lapply(df[outcome_columns],
                               as.factor)
 ```
