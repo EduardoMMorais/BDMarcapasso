@@ -55,6 +55,19 @@ df_names <- df_names %>%
   rename(momento.aquisicao = momento.da.aquisição.do.dado..admissão.t0.ou.pós.t0.)
 ```
 
+# Creating columns
+
+```{r}
+df <- df %>%
+  mutate(hospital_stay = as.numeric(date_discharge_t0 - date_admission_t0))
+
+df_names <- df_names %>%
+  add_row(variable.name = 'hospital_stay', 
+          field.label = 'Tempo de permanência hospitalar',
+          abbrev.field.label = 'Tempo de permanência hospitalar',
+          momento.aquisicao = 'Admissão t0')
+```
+
 # Separating columns by type
 
 ```{r}

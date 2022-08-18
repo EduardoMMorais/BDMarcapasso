@@ -37,7 +37,7 @@ knitr::opts_chunk$set(
 ```{r}
 k <- 5 # Number of folds for cross validation
 grid_size <- 50 # Number of parameter combination to tune on each model
-max_auc_loss <- 0.005 # Max accepted loss of AUC for reducing num of features
+max_auc_loss <- 0.01 # Max accepted loss of AUC for reducing num of features
 ```
 
 # Imports
@@ -57,6 +57,8 @@ library(bonsai)
 library(lightgbm)
 library(pROC)
 library(caret)
+
+source("aux_functions.R")
 
 select <- dplyr::select
 ```
@@ -99,12 +101,14 @@ eligible_columns <- df_names %>%
 
 exception_columns <- c('death_intraop', 'death_intraop_1', 'disch_outcomes_t0')
 
-correlated_columns <- c('year_procedure_1', # com year_adm_t0
+correlated_columns = c('year_procedure_1', # com year_adm_t0
                        'age_surgery_1', # com age
                        'admission_t0', # com admission_pre_t0_count
                        'atb', # com meds_antimicrobianos
                        'classe_meds_cardio_qtde', # com classe_meds_qtde
-                       'suporte_hemod' # com proced_invasivos_qtde
+                       'suporte_hemod', # com proced_invasivos_qtde,
+                       'radiografia', # com exames_imagem_qtde
+                       'ecg' # com metodos_graficos_qtde
                        )
 
 eligible_features <- eligible_columns %>%
@@ -140,77 +144,6 @@ df_test <- testing(df_split) %>% select(all_of(c(features, outcome_column)))
 
 df_folds <- vfold_cv(df_train, v = k,
                      strata = all_of(outcome_column))
-```
-
-# Functions
-
-```{r}
-niceFormatting <- function(df, caption="", digits = 2, font_size = NULL){
-  df %>%
-    kbl(booktabs = T, longtable = T, caption = caption,
-        digits = digits, format = "latex") %>%
-    kable_styling(font_size = font_size,
-                  latex_options = c("striped", "HOLD_position", "repeat_header"))
-}
-```
-
-```{r}
-validation = function(model_fit, new_data, plot=TRUE) {
-  test_predictions_prob <-
-    predict(model_fit, new_data = new_data, type = "prob") %>%
-    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
-    .$`1`
-  
-  pROC_obj <- roc(
-    new_data[[outcome_column]],
-    test_predictions_prob, 
-    direction = "<",
-    levels = c(0, 1),
-    smoothed = TRUE,
-    ci = TRUE,
-    ci.alpha = 0.9,
-    stratified = FALSE,
-    plot = plot,
-    auc.polygon = TRUE,
-    max.auc.polygon = TRUE,
-    grid = TRUE,
-    print.auc = TRUE,
-    show.thres = TRUE
-  )
-  
-  proc_coords <- coords(
-    pROC_obj,
-    x = "best",
-    best.method = "youden",
-    ret = c(
-      "threshold",
-      "sensitivity",
-      "specificity"
-    )
-  )
-  
-  test_predictions_prob <-
-    predict(model_fit, new_data = new_data, type = "prob") %>%
-    rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
-    .$`1`
-  
-  test_predictions_class <- ifelse(test_predictions_prob > proc_coords$threshold, 
-                                   1, 0)
-  
-  conf_matrix <- table(data = test_predictions_class,
-                       reference = new_data[[outcome_column]])
-  
-  if (plot) {
-    sens.ci <- ci.se(pROC_obj)
-    plot(sens.ci, type = "shape", col = "lightblue", print.thres = "best")
-    plot(sens.ci, type = "bars")
-    
-    print(sprintf("Optimal Threshold: %.2f", proc_coords$threshold))
-    caret::confusionMatrix(conf_matrix) %>% print
-  }
-
-  return(pROC_obj)
-}
 ```
 
 # Feature Selection
@@ -343,7 +276,7 @@ while (current_auc_loss < max_auc_loss) {
   # print(c(length(current_features), current_auc_loss))
 }
 
-selection_results %>% niceFormatting(digits = 4)
+selection_results %>% niceFormatting(digits = 4, label = 1)
 ```
 
 
@@ -442,7 +375,7 @@ lightgbm_tune <-
 
 lightgbm_tune %>%
   show_best("roc_auc") %>%
-  niceFormatting(digits = 5)
+  niceFormatting(digits = 5, label = 2)
 
 best_lightgbm <- lightgbm_tune %>%
   select_best("roc_auc")
@@ -535,7 +468,7 @@ lightgbm_tune <-
 
 lightgbm_tune %>%
   show_best("roc_auc") %>%
-  niceFormatting(digits = 5)
+  niceFormatting(digits = 5, label = 3)
 
 best_lightgbm <- lightgbm_tune %>%
   select_best("roc_auc")
@@ -627,7 +560,7 @@ lightgbm_tune <-
 
 lightgbm_tune %>%
   show_best("roc_auc") %>%
-  niceFormatting(digits = 5)
+  niceFormatting(digits = 5, label = 4)
 
 best_lightgbm <- lightgbm_tune %>%
   select_best("roc_auc")

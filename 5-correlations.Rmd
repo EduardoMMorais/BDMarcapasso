@@ -22,8 +22,10 @@ knitr::opts_chunk$set(
 ```{r warning=F, message=F}
 library(tidyverse)
 library(yaml)
-library(kableExtra)
 library(ggcorrplot)
+library(kableExtra)
+
+source("aux_functions.R")
 ```
 
 # Loading data
@@ -42,23 +44,12 @@ df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.
 df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.integer)
 ```
 
-# Functions
-
-```{r}
-niceFormatting = function(df, caption="", digits = 2, font_size = NULL){
-  df %>%
-    kbl(booktabs = T, longtable = T, caption = caption, digits = digits, format = "latex") %>%
-    kable_styling(font_size = font_size,
-                  latex_options = c("striped", "HOLD_position", "repeat_header"))
-}
-```
-
 # Correlation
 
 ```{r}
 na_eligible_columns <- df %>% 
   summarise(across(everything(), ~ mean(is.na(.)))) %>%
-  select_if(function(.) last(.) < 0.8) %>%
+  select_if(function(.) last(.) < 0.9) %>%
   names
 
 unique_eligible_columns <- df %>% 
@@ -66,30 +57,27 @@ unique_eligible_columns <- df %>%
   select_if(function(.) last(.) > 1) %>%
   names
 
-pre_columns = df_names %>%
+t0_columns = df_names %>%
   filter(momento.aquisicao == 'Admissão t0') %>%
   .$variable.name
 
-weird_columns <- c('dieta_parenteral', 'dieta_enteral')
+exception_columns <- c('dieta_enteral')
 
 eligible_columns <- intersect(na_eligible_columns,
                               unique_eligible_columns) %>%
-  intersect(pre_columns)
-
-eligible_columns <- setdiff(eligible_columns, weird_columns)
+  intersect(t0_columns) %>%
+  setdiff(exception_columns)
 
 corr <- df %>% 
   select(all_of(intersect(columns_list$numerical_columns,
                           eligible_columns))) %>%
-  drop_na %>%
-  cor %>%
+  cor(use = "pairwise.complete.obs") %>%
   as.matrix
 
 corr_table <- corr %>%
   as.data.frame %>%
   tibble::rownames_to_column(var = 'row') %>% 
-  tidyr::pivot_longer(-row, names_to = 'column', values_to = 'correlation') %>%
-  filter(row < column)
+  tidyr::pivot_longer(-row, names_to = 'column', values_to = 'correlation')
 
 rename_column <- function(df, column_name){
   variable.name <- 'variable.name'
@@ -102,11 +90,40 @@ rename_column <- function(df, column_name){
 }
 
 corr_table %>%  
-  filter(correlation > 0.9) %>%
+  filter(correlation > 0.8) %>%
+  filter(row < column) %>%
   rename_column('row') %>%
   rename_column('column') %>%
   select(row, column, correlation) %>%
-  niceFormatting(caption = "Pearson Correlation", font_size = 9)
+  niceFormatting(caption = "Pearson Correlation", font_size = 9, label = 1)
+```
+```{r echo=F, results='asis'}
+cols <- c('antiarritmico', 'betabloqueador', 'bloq_calcio', 'dva', 'espironolactona', 'ieca_bra', 'insuf_cardiaca')
+
+corr_table %>%
+  filter(row %in% cols, column == 'meds_cardiovasc_qtde') %>%
+  rename_column('row') %>%
+  rename_column('column') %>%
+  niceFormatting(caption = "meds cardiovasc qtde correlations", 
+                 font_size = 9, label = 2)
+
+cols <- c('radiografia')
+
+corr_table %>%
+  filter(row %in% cols, column == 'exames_imagem_qtde') %>%
+  rename_column('row') %>%
+  rename_column('column') %>%
+  niceFormatting(caption = "exames imagem qtde correlations", 
+                 font_size = 9, label = 3)
+
+cols <- c('ecg')
+
+corr_table %>%
+  filter(row %in% cols, column == 'metodos_graficos_qtde') %>%
+  rename_column('row') %>%
+  rename_column('column') %>%
+  niceFormatting(caption = "metodos graficos qtde correlations", 
+                 font_size = 9, label = 4)
 ```
 
 # Hypothesis Tests
@@ -148,7 +165,7 @@ df_wilcox %>%
   mutate(`p-value` = case_when(`p-value` == 1 ~ sprintf('> 0%s999', getOption("OutDec")), 
                                `p-value` < 0.001 ~ sprintf('< 0%s001', getOption("OutDec")), 
                                TRUE ~ as.character(round(`p-value`, 3)))) %>%
-  niceFormatting(caption = "Mann-Whitney Test")
+  niceFormatting(caption = "Mann-Whitney Test", label = 5)
 ```
 
 ```{r}
@@ -187,7 +204,7 @@ df_chisq %>%
   mutate(`p-value` = case_when(`p-value` == 1 ~ sprintf('> 0%s999', getOption("OutDec")), 
                                `p-value` < 0.001 ~ sprintf('< 0%s001', getOption("OutDec")), 
                                TRUE ~ as.character(round(`p-value`, 3)))) %>%
-  niceFormatting(caption = "Chi-squared test")
+  niceFormatting(caption = "Chi-squared test", label = 6)
 ```
 
 ```{r echo=F, eval=F}

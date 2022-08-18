@@ -7,20 +7,19 @@ output:
     template: latex-template.tex
 ---
 
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  warning = F,
+  message = F
+)
+```
+
 ```{r warning=F, message=F}
 library(tidyverse)
 library(kableExtra)
-```
 
-```{r}
-niceFormatting = function(df, caption="", digits = 2, font_size = NULL, label = 1){
-  df %>%
-    kbl(booktabs = T, longtable = T, caption = caption, digits = digits, format = "latex", label = label) %>%
-    kable_styling(font_size = font_size,
-                  latex_options = c("striped", "HOLD_position", "repeat_header"))
-}
+source("aux_functions.R")
 ```
-
 
 ```{r}
 path <- "./auxiliar/model_selection/performance"
