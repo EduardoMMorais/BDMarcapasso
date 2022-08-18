@@ -5,7 +5,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: readmission_30d
+  outcome_column: death_180days
   features_list: !r c()
 title: "`r paste('Final Model -', params$outcome_column)`"
 ---
@@ -307,13 +307,15 @@ selection_results %>%
   ggplot(aes(x = `Features Removed`, y = `CV AUC`,
              ymin = `CV AUC Low`, ymax = `CV AUC High`)) + 
   geom_line() + 
-  geom_ribbon(alpha = .3) # Add auc threshold
+  geom_ribbon(alpha = .3) + 
+  geom_hline(yintercept = full_model$cv_auc - max_auc_loss,
+             linetype="dashed", color = "red")
 
-selection_results %>%
-  filter(`Number of Features` < length(features)) %>%
-  mutate(`Features Removed` = length(features) - `Number of Features`) %>%
-  ggplot(aes(x = `Features Removed`, y = `AUC Loss`)) + 
-  geom_line()
+# selection_results %>%
+#   filter(`Number of Features` < length(features)) %>%
+#   mutate(`Features Removed` = length(features) - `Number of Features`) %>%
+#   ggplot(aes(x = `Features Removed`, y = `AUC Loss`)) + 
+#   geom_line()
 ```
 
 # Hyperparameter tuning
@@ -324,206 +326,13 @@ Selected features:
 gluedown::md_order(selected_features, seq = TRUE, pad = TRUE)
 ```
 
-## Smote
-
-```{r eval=F}
-library(themis)
-
-lightgbm_recipe <-
-  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
-         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
-  step_novel(all_nominal_predictors()) %>%
-  step_unknown(all_nominal_predictors()) %>%
-  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
-  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
-  step_impute_mean(all_numeric_predictors()) %>%
-  step_zv(all_predictors()) %>%
-  step_smote(!!sym(outcome_column))
-
-lightgbm_spec <- boost_tree(
-  mtry = tune(),
-  trees = tune(),
-  min_n = tune(),
-  tree_depth = tune(),
-  learn_rate = tune(),
-  loss_reduction = tune(),
-  sample_size = 1
-) %>%
-  set_engine("lightgbm") %>%
-  set_mode("classification")
-
-lightgbm_grid <- grid_latin_hypercube(
-  finalize(mtry(),
-           df_train %>% dplyr::select(all_of(c(selected_features, outcome_column)))),
-  dials::trees(range = c(100L, 300L)),
-  min_n(),
-  tree_depth(),
-  learn_rate(),
-  loss_reduction(),
-  size = grid_size
-)
-
-lightgbm_workflow <-
-  workflow() %>%
-  add_recipe(lightgbm_recipe) %>%
-  add_model(lightgbm_spec)
-
-lightgbm_tune <-
-  lightgbm_workflow %>%
-  tune_grid(resamples = df_folds,
-            grid = lightgbm_grid)
-
-lightgbm_tune %>%
-  show_best("roc_auc") %>%
-  niceFormatting(digits = 5, label = 2)
-
-best_lightgbm <- lightgbm_tune %>%
-  select_best("roc_auc")
-
-lightgbm_tune %>%
-  collect_metrics() %>%
-  filter(.metric == "roc_auc") %>%
-  select(mean, mtry:tree_depth) %>%
-  pivot_longer(mtry:tree_depth,
-               values_to = "value",
-               names_to = "parameter"
-  ) %>%
-  ggplot(aes(value, mean, color = parameter)) +
-  geom_point(alpha = 0.8, show.legend = FALSE) +
-  facet_wrap(~parameter, scales = "free_x") +
-  labs(x = NULL, y = "AUC")
-
-final_lightgbm_workflow <-
-  lightgbm_workflow %>%
-  finalize_workflow(best_lightgbm)
-
-last_lightgbm_fit <-
-  final_lightgbm_workflow %>%
-  last_fit(df_split)
-
-final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
-
-lightgbm_smote_auc <- validation(final_lightgbm_fit, df_test)
-
-lightgbm_parameters <- lightgbm_tune %>%
-  show_best("roc_auc", n = 1) %>%
-  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
-  as.list
-
-saveRDS(
-  lightgbm_parameters,
-  file = sprintf(
-    "./auxiliar/final_model/hyperparameters/lightgbm_smote_%s.rds",
-    outcome_column
-  )
-)
-```
-
-## Upsample
-
-```{r eval=F}
-lightgbm_recipe <-
-  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
-         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
-  step_novel(all_nominal_predictors()) %>%
-  step_unknown(all_nominal_predictors()) %>%
-  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
-  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
-  step_impute_mean(all_numeric_predictors()) %>%
-  step_zv(all_predictors()) %>%
-  step_upsample(!!sym(outcome_column))
-
-lightgbm_spec <- boost_tree(
-  mtry = tune(),
-  trees = tune(),
-  min_n = tune(),
-  tree_depth = tune(),
-  learn_rate = tune(),
-  loss_reduction = tune(),
-  sample_size = 1
-) %>%
-  set_engine("lightgbm") %>%
-  set_mode("classification")
-
-lightgbm_grid <- grid_latin_hypercube(
-  finalize(mtry(),
-           df_train %>% dplyr::select(all_of(c(selected_features, outcome_column)))),
-  dials::trees(range = c(100L, 300L)),
-  min_n(),
-  tree_depth(),
-  learn_rate(),
-  loss_reduction(),
-  size = grid_size
-)
-
-lightgbm_workflow <-
-  workflow() %>%
-  add_recipe(lightgbm_recipe) %>%
-  add_model(lightgbm_spec)
-
-lightgbm_tune <-
-  lightgbm_workflow %>%
-  tune_grid(resamples = df_folds,
-            grid = lightgbm_grid)
-
-lightgbm_tune %>%
-  show_best("roc_auc") %>%
-  niceFormatting(digits = 5, label = 3)
-
-best_lightgbm <- lightgbm_tune %>%
-  select_best("roc_auc")
-
-lightgbm_tune %>%
-  collect_metrics() %>%
-  filter(.metric == "roc_auc") %>%
-  select(mean, mtry:tree_depth) %>%
-  pivot_longer(mtry:tree_depth,
-               values_to = "value",
-               names_to = "parameter"
-  ) %>%
-  ggplot(aes(value, mean, color = parameter)) +
-  geom_point(alpha = 0.8, show.legend = FALSE) +
-  facet_wrap(~parameter, scales = "free_x") +
-  labs(x = NULL, y = "AUC")
-
-final_lightgbm_workflow <-
-  lightgbm_workflow %>%
-  finalize_workflow(best_lightgbm)
-
-last_lightgbm_fit <-
-  final_lightgbm_workflow %>%
-  last_fit(df_split)
-
-final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
-
-lightgbm_upsample_auc <- validation(final_lightgbm_fit, df_test)
-
-lightgbm_parameters <- lightgbm_tune %>%
-  show_best("roc_auc", n = 1) %>%
-  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
-  as.list
-
-saveRDS(
-  lightgbm_parameters,
-  file = sprintf(
-    "./auxiliar/final_model/hyperparameters/lightgbm_upsample_%s.rds",
-    outcome_column
-  )
-)
-```
-
 ## Standard
 
 ```{r}
 lightgbm_recipe <-
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
-         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
-  step_novel(all_nominal_predictors()) %>%
-  step_unknown(all_nominal_predictors()) %>%
-  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
-  step_dummy(all_nominal_predictors(), one_hot = TRUE) %>%
-  step_impute_mean(all_numeric_predictors()) %>%
-  step_zv(all_predictors())
+         data = df_train %>% select(all_of(c(selected_features, outcome_column))))
+  # step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
 
 lightgbm_spec <- boost_tree(
   mtry = tune(),
@@ -538,8 +347,7 @@ lightgbm_spec <- boost_tree(
   set_mode("classification")
 
 lightgbm_grid <- grid_latin_hypercube(
-  finalize(mtry(),
-           df_train %>% select(all_of(c(selected_features, outcome_column)))),
+  mtry(range = c(1L, length(selected_features))),
   dials::trees(range = c(100L, 300L)),
   min_n(),
   tree_depth(),
