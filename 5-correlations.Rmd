@@ -132,14 +132,14 @@ corr_table %>%
 df_wilcox <- tibble()
 
 for (variable in intersect(columns_list$numerical_columns,
-                           eligible_columns)){
+                           eligible_columns)) {
   if (mean(is.na(df[[variable]])) > 0.95) next
   
   x <- filter(df, !!sym(outcome_column) == 0)[[variable]]
   y <- filter(df, !!sym(outcome_column) == 1)[[variable]]
   
   test = tryCatch(wilcox.test(x, y, alternative = "two.sided", exact = FALSE), 
-                  error=function(cond) {
+                  error = function(cond) {
                     message("Can't calculate Wilcox test for variable ", variable)
                     message(cond)
                     return(list(statistic = NaN, p.value = NaN))
@@ -172,12 +172,12 @@ df_wilcox %>%
 df_chisq <- tibble()
 
 for (variable in intersect(columns_list$categorical_columns,
-                           eligible_columns)){
-  if (length(unique(df[[variable]])) > 1){
+                           eligible_columns)) {
+  if (length(unique(df[[variable]])) > 1) {
     test <- tryCatch(chisq.test(df[[outcome_column]], 
-                       df[[variable]] %>% replace_na('NA'), # counting NA as cat
-                       simulate.p.value = TRUE),
-                     error = function (cond) {
+                     df[[variable]] %>% replace_na('NA'), # counting NA as cat
+                     simulate.p.value = TRUE),
+                     error = function(cond) {
                        message("Can't calculate Chi Squared test for variable ", variable)
                        message(cond)
                        return(list(statistic = NaN, p.value = NaN))

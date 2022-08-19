@@ -153,7 +153,7 @@ xgboost_spec <- boost_tree(
 
 xgboost_grid <- grid_latin_hypercube(
   finalize(mtry(), df_train),
-  trees(),
+  trees(range = c(100L, 300L)),
   min_n(),
   tree_depth(),
   learn_rate(),
@@ -245,7 +245,7 @@ lightgbm_spec <- boost_tree(
 
 lightgbm_grid <- grid_latin_hypercube(
   finalize(mtry(), df_train),
-  trees(),
+  trees(range = c(100L, 300L)),
   min_n(),
   tree_depth(),
   learn_rate(),
@@ -446,7 +446,7 @@ rf_spec <-
   set_engine("ranger") 
 
 rf_grid <- grid_latin_hypercube(mtry(range = c(1L, 20L)),
-                                trees(),
+                                trees(range = c(100L, 300L)),
                                 min_n(),
                                 size = grid_size)
 
