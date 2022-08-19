@@ -1,5 +1,7 @@
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
+SHUTDOWN <- FALSE
+
 rmarkdown::render(
   '1-processing.Rmd',
   output_file = './results/1-processing.pdf',
@@ -114,3 +116,5 @@ rmarkdown::render(
   clean = TRUE,
   quiet = TRUE
 )
+
+if (SHUTDOWN) system('shutdown -s')

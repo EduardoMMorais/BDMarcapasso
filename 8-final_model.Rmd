@@ -154,10 +154,9 @@ model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
     recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
            data = df_train %>% select(all_of(c(features, outcome_column)))) %>% 
     step_novel(all_nominal_predictors()) %>% 
-    step_unknown(all_nominal_predictors()) %>% 
-    step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>% 
-    step_impute_mean(all_numeric_predictors()) %>%
-    step_zv(all_predictors()) 
+    step_unknown(all_nominal_predictors()) %>%
+    step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
+    step_dummy(all_nominal_predictors())
   
   model_spec <-
     do.call(boost_tree, hyperparameters) %>%
@@ -331,8 +330,11 @@ gluedown::md_order(selected_features, seq = TRUE, pad = TRUE)
 ```{r}
 lightgbm_recipe <-
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
-         data = df_train %>% select(all_of(c(selected_features, outcome_column))))
-  # step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
+         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
+  step_novel(all_nominal_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
+  step_dummy(all_nominal_predictors())
 
 lightgbm_spec <- boost_tree(
   mtry = tune(),
@@ -348,7 +350,7 @@ lightgbm_spec <- boost_tree(
 
 lightgbm_grid <- grid_latin_hypercube(
   mtry(range = c(1L, length(selected_features))),
-  dials::trees(range = c(100L, 300L)),
+  trees(),
   min_n(),
   tree_depth(),
   learn_rate(),
@@ -429,8 +431,9 @@ shap.plot.summary.wrap1(model = lightgbm_model, X = matrix_train, top_n = 10, di
 
 # Crunch SHAP values
 shap <- shap.prep(lightgbm_model, X_train = matrix_test)
+n_plots <- min(5, length(selected_features))
 
-for (x in shap.importance(shap, names_only = TRUE)[1:5]) {
+for (x in shap.importance(shap, names_only = TRUE)[1:n_plots]) {
   p <- shap.plot.dependence(
     shap,
     x = x,

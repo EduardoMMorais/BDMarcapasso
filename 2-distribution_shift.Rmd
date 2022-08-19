@@ -52,7 +52,7 @@ k = 6
 
 df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.numeric)
 
-for (column in setdiff(columns_list$numerical_columns, columns_list$outcome_columns)){
+for (column in setdiff(columns_list$numerical_columns, columns_list$outcome_columns)) {
   if (mean(is.na(df[[column]])) > 0.5) next
 
   df %>%
@@ -73,18 +73,16 @@ for (column in setdiff(columns_list$numerical_columns, columns_list$outcome_colu
     ggplot(aes(x = rounded_date_admission_t0, y = value, color = metric)) + 
       geom_line() +
       geom_vline(xintercept = lubridate::ymd('2020-03-01'), linetype = "dashed") +
-      labs(y = column)-> p
+      labs(y = column) -> p
       
   print(p)
 }
 ```
 
 ```{r warning=F, message=F, fig.show="hold", out.width="50%", fig.height = 5}
-column <- 'death_intraop_2'
-
 df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
 
-for (column in c(columns_list$categorical_columns, columns_list$outcome_columns)){
+for (column in c(columns_list$categorical_columns, columns_list$outcome_columns)) {
   if (mean(is.na(df[[column]])) > 0.5) next
   if (length(unique(df[[column]])) > 10) print(column)
   
@@ -103,9 +101,9 @@ for (column in c(columns_list$categorical_columns, columns_list$outcome_columns)
                     fill = list(N = 0, percentage = 0)) %>%
     ggplot(aes(x = rounded_date_admission_t0, y = percentage,
                color = !!sym(column), fill = !!sym(column))) + 
-      geom_area(alpha=0.6) +
+      geom_area(alpha = 0.6) +
       scale_y_continuous(labels = scales::percent) +
-      labs(y = column)-> p
+      labs(y = column) -> p
       
   print(p)
 }
@@ -118,7 +116,7 @@ df %>%
   filter(rounded_date_admission_t0 <= lubridate::ymd('2021-08-01'),
          rounded_date_admission_t0 <= lubridate::ymd('2021-01-01')) %>%
   .$aco %>% 
-  max(na.rm=T)
+  max(na.rm = T)
 
 column <- 'aco'
 df %>%

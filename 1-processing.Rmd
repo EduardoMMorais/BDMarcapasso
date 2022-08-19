@@ -186,21 +186,3 @@ saveRDS(df_names, "dataset/processed_dictionary.rds")
 save(df, file = "dataset/processed_data.RData")
 save(df_names, file = "dataset/processed_dictionary.RData")
 ```
-
-```{r eval = F}
-df_names %>%
-  filter(stringr::str_detect(options..definition, '\\|')) %>%
-  filter(variable.name == "transplant")
-
-column <- 'transplante_cardiaco'
-
-column %in% categorical_columns
-column %in% numerical_columns
-
-df %>%
-  group_by(transplant, transplante_cardiaco) %>%
-  tally
-
-
-for (col in numerical_columns) if(max(df[[col]], na.rm = T) == 1) print(col)
-```

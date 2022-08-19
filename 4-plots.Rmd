@@ -42,7 +42,7 @@ df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.
 ```{r warning=F, fig.show="hold", out.width="50%", fig.height = 5}
 df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
 
-for (column in columns_list$numerical_columns){
+for (column in columns_list$numerical_columns) {
   if (mean(is.na(df[[column]])) > 0.95 | length(unique(df[[column]])) < 10) next
   
   df %>%
