@@ -1,39 +1,45 @@
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 SHUTDOWN <- FALSE
+RUN_ALL <- FALSE
 
-rmarkdown::render(
-  '1-processing.Rmd',
-  output_file = './results/1-processing.pdf',
-  clean = TRUE,
-  quiet = TRUE
-)
+START = 4
+FINISH = length(outcome_columns)
 
-rmarkdown::render(
-  '2-distribution_shift.Rmd',
-  output_file = './results/2-distribution_shift.pdf',
-  clean = TRUE,
-  quiet = TRUE
-)
-
-dir.create(file.path(paste0('./results/', 'split')),
-           showWarnings = FALSE)
-
-rmarkdown::render(
-  '3-tables.Rmd',
-  params = list(outcome_column = 'split'),
-  output_file = paste0('./results/', 'split', '/3-tables.pdf'),
-  clean = TRUE,
-  quiet = TRUE
-)
-
-rmarkdown::render(
-  '3-tables.Rmd',
-  params = list(outcome_column = 'general'),
-  output_file = './results/3-tables.pdf',
-  clean = TRUE,
-  quiet = TRUE
-)
+if (RUN_ALL) {
+  rmarkdown::render(
+    '1-processing.Rmd',
+    output_file = './results/1-processing.pdf',
+    clean = TRUE,
+    quiet = TRUE
+  )
+  
+  rmarkdown::render(
+    '2-distribution_shift.Rmd',
+    output_file = './results/2-distribution_shift.pdf',
+    clean = TRUE,
+    quiet = TRUE
+  )
+  
+  dir.create(file.path(paste0('./results/', 'split')),
+             showWarnings = FALSE)
+  
+  rmarkdown::render(
+    '3-tables.Rmd',
+    params = list(outcome_column = 'split'),
+    output_file = paste0('./results/', 'split', '/3-tables.pdf'),
+    clean = TRUE,
+    quiet = TRUE
+  )
+  
+  rmarkdown::render(
+    '3-tables.Rmd',
+    params = list(outcome_column = 'general'),
+    output_file = './results/3-tables.pdf',
+    clean = TRUE,
+    quiet = TRUE
+  )
+}
 
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
@@ -47,10 +53,8 @@ outcome_columns = setdiff(
   )
 )
 
-start = 1
-finish = length(outcome_columns)
-
-for (outcome_column in outcome_columns[start:finish]) {
+for (outcome_column in outcome_columns[START:FINISH]) {
+  cat(sprintf("Running %s", outcome_column))
   dir.create(file.path(paste0('./results/', outcome_column)),
              showWarnings = FALSE)
 
