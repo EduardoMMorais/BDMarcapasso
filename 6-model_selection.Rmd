@@ -430,7 +430,7 @@ if (tree_auc$auc > 0.55) {
 ```{r results=F}
 rf_recipe <- 
   recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
-         data = df_train %>% select(c('hospital_stay', 'admission_pre_t0_count', outcome_column))) %>% 
+         data = df_train) %>% 
   step_novel(all_nominal_predictors()) %>% 
   step_unknown(all_nominal_predictors()) %>% 
   step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>% 
@@ -605,7 +605,7 @@ df_auc <- tibble::tribble(
   ~Model, ~`AUC`, ~`Lower Limit`, ~`Upper Limit`,
   'XGBoost', as.numeric(xgboost_auc$auc), xgboost_auc$ci[1], xgboost_auc$ci[3],
   'LightGBM', as.numeric(lightgbm_auc$auc), lightgbm_auc$ci[1], lightgbm_auc$ci[3],
-  'GLM', as.numeric(glm_auc$auc), glm_auc$ci[1], glm_auc$ci[3],
+  'GLM', as.numeric(glmnet_auc$auc), glmnet_auc$ci[1], glmnet_auc$ci[3],
   'Decision Tree', as.numeric(tree_auc$auc), tree_auc$ci[1], tree_auc$ci[3],
   'Random Forest', as.numeric(rf_auc$auc), rf_auc$ci[1], rf_auc$ci[3]
 ) %>% 
