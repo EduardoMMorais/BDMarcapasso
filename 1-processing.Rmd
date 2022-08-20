@@ -36,7 +36,7 @@ df_names <- read_excel("dataset/Dicionario_dados_BD Marcapasso_11jul22.xlsx")
 # Fixing data dictionary
 
 ```{r}
-names(df_names) <- make.names(names(df_names), unique=TRUE) %>% tolower
+names(df_names) <- make.names(names(df_names), unique = TRUE) %>% tolower
 
 df_names <- df_names %>%
   mutate(variable.name = case_when(variable.name == 'icu_days_t0' ~ 'icu_t0', 
@@ -71,9 +71,13 @@ df_names <- df_names %>%
 # Separating columns by type
 
 ```{r}
-outcome_columns <- df_names %>% 
-  filter(str_detect(momento.aquisicao, 'Desfecho')) %>% 
-  .$variable.name
+outcome_columns <- df_names %>%
+  filter(str_detect(momento.aquisicao, 'Desfecho')) %>%
+  .$variable.name %>%
+  setdiff(c('death_intraop',
+            'death_hospitalar',
+            'death_readmission',
+            'death'))
 
 categorical_columns <- df_names %>%
   filter(stringr::str_detect(options..definition, '\\|')) %>%
@@ -87,7 +91,11 @@ date_columns <- df_names %>%
 
 location_columns <- c('zipcode', 'patient_city')
 
-other_columns <- c('record_id')
+other_columns <- c('record_id',
+                   'death_intraop',
+                   'death_hospitalar',
+                   'death_readmission',
+                   'death')
 
 numerical_columns <- setdiff(names(df),
                              c(categorical_columns, date_columns, 
