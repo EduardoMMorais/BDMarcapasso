@@ -303,51 +303,27 @@ glmnet_recipe <-
   step_normalize(all_numeric_predictors()) 
 
 glmnet_spec <- 
-  logistic_reg(penalty = tune(), mixture = tune()) %>% 
+  logistic_reg(penalty = 0) %>% 
   set_mode("classification") %>% 
   set_engine("glmnet") 
-
-glmnet_grid <- grid_latin_hypercube(penalty(),
-                                    mixture(),
-                                    size = grid_size)
 
 glmnet_workflow <- 
   workflow() %>% 
   add_recipe(glmnet_recipe) %>% 
   add_model(glmnet_spec) 
 
-glmnet_tune <- 
-  glmnet_workflow %>%
-  tune_grid(resamples = df_folds,
-            grid = glmnet_grid)
+glm_fit <- glmnet_workflow %>% 
+  fit(df_train)
 
-glmnet_tune %>% 
-  collect_metrics()
-
-autoplot(glmnet_tune, metric = "roc_auc")
-
-glmnet_tune %>%
-  show_best("roc_auc")
-
-best_glmnet <- glmnet_tune %>%
-  select_best("roc_auc")
-
-final_glmnet_workflow <- 
-  glmnet_workflow %>% 
-  finalize_workflow(best_glmnet)
-
-last_glmnet_fit <- 
-  final_glmnet_workflow %>%
-  last_fit(df_split) 
-
-final_glmnet_fit <- extract_workflow(last_glmnet_fit)
-
-glmnet_auc <- validation(final_glmnet_fit, df_test)
+glmnet_auc <- validation(glm_fit, df_test)
 
 pfun_glmnet <- function(object, newdata) predict(object, newx = newdata)
 
-extract_vip(final_glmnet_fit, pred_wrapper = pfun_glmnet,
+extract_vip(glm_fit, pred_wrapper = pfun_glmnet,
             reference_class = "1", method = 'model')
+
+extract_vip(glm_fit, pred_wrapper = pfun_glmnet,
+            reference_class = "1", method = 'permute')
 ```
 
 # Decision Tree
@@ -415,6 +391,10 @@ if (tree_auc$auc > 0.55) {
 extract_vip(final_tree_fit, pred_wrapper = predict,
             reference_class = "0", use_matrix = FALSE,
             method = 'model')
+
+extract_vip(final_tree_fit, pred_wrapper = predict,
+            reference_class = "1", use_matrix = FALSE,
+            method = 'permute')
 ```
 
 # Random Forest
@@ -482,6 +462,10 @@ pfun_rf <- function(object, newdata) predict(object, data = newdata)
 extract_vip(final_rf_fit, pred_wrapper = predict,
             reference_class = "1", use_matrix = FALSE, 
             method = 'model')
+
+extract_vip(final_rf_fit, pred_wrapper = predict,
+            reference_class = "1", use_matrix = FALSE, 
+            method = 'permute')
 ```
 
 # KNN

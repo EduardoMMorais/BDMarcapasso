@@ -434,8 +434,8 @@ lightgbm_tuning <- function(recipe) {
 }
 
 standard_results <- lightgbm_tuning(lightgbm_recipe)
-smote_results <- lightgbm_tuning(lightgbm_smote_recipe)
-upsample_results <- lightgbm_tuning(lightgbm_upsample_recipe)
+# smote_results <- lightgbm_tuning(lightgbm_smote_recipe)
+# upsample_results <- lightgbm_tuning(lightgbm_upsample_recipe)
 
 final_lightgbm_fit <- standard_results$fit
 lightgbm_parameters <- standard_results$parameters
@@ -495,9 +495,9 @@ df_auc <- tibble::tribble(
   'Full Model', full_model$auc, full_model$auc_lower, full_model$auc_upper, length(features),
   'Trimmed Model', trimmed_model$auc, trimmed_model$auc_lower, trimmed_model$auc_upper, length(trimmed_features),
   'Feature Selected Model', feature_selected_model$auc, feature_selected_model$auc_lower, feature_selected_model$auc_upper, length(selected_features),
-  'Tuned Standard Model', standard_results$auc, standard_results$auc_lower, standard_results$auc_upper, length(selected_features),
-  'Tuned Smote Model', smote_results$auc, smote_results$auc_lower, smote_results$auc_upper, length(selected_features),
-  'Tuned Upsample Model', upsample_results$auc, upsample_results$auc_lower, upsample_results$auc_upper, length(selected_features)
+  'Tuned Standard Model', standard_results$auc, standard_results$auc_lower, standard_results$auc_upper, length(selected_features)
+  # 'Tuned Smote Model', smote_results$auc, smote_results$auc_lower, smote_results$auc_upper, length(selected_features),
+  # 'Tuned Upsample Model', upsample_results$auc, upsample_results$auc_lower, upsample_results$auc_upper, length(selected_features)
 ) %>% 
   mutate(Target = outcome_column,
          `Model (features)` = fct_reorder(paste0(Model, "-", Features), -Features))
