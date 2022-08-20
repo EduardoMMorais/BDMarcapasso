@@ -1,6 +1,6 @@
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
-SHUTDOWN <- FALSE
+SHUTDOWN <- TRUE
 RUN_ALL <- TRUE
 
 START = 1

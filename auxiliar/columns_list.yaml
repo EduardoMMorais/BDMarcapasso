@@ -21,7 +21,6 @@ categorical_columns:
 - stroke
 - copd
 - cancer
-- surgery_count
 - procedure_type_1
 - reop_type_1
 - procedure_type_new
@@ -70,16 +69,31 @@ categorical_columns:
 - icu_post_t0
 - dialysis_post_t0
 - disch_outcomes_t0
+- readmission_30d
+- readmission_60d
+- readmission_180d
+- readmission_1year
 - readmission_cir_30d
 - readmission_cir_60d
 - readmission_cir_180d
 - readmission_cir_1year
 - final_outcome
+- death_intraop
+- death_hospitalar
+- death_readmission
+- death_30days
+- death_180days
+- death_1year
+- death_2year
+- death_3year
+- death
 - death_cause
 - ventilacao_mecanica
+- transplante_cardiaco
 numerical_columns:
 - age
 - comorbidities_count
+- surgery_count
 - year_procedure_1
 - age_surgery_1
 - year_procedure_2
@@ -117,20 +131,7 @@ numerical_columns:
 - year_adm_t0
 - icu_t0
 - dialysis_t0
-- readmission_30d
-- readmission_60d
-- readmission_180d
-- readmission_1year
 - survival_time_overall
-- death_intraop
-- death_hospitalar
-- death_readmission
-- death_30days
-- death_180days
-- death_1year
-- death_2year
-- death_3year
-- death
 - survival_time_death
 - admission_t0_emergency
 - aco
@@ -163,7 +164,6 @@ numerical_columns:
 - vni
 - cec
 - cir_cardiovascular
-- transplante_cardiaco
 - cir_toracica
 - outros_proced_cirurgicos
 - traqueostomia
@@ -222,6 +222,7 @@ numerical_columns:
 - classe_meds_cardio_qtde
 - meds_cardiovasc_qtde
 - meds_antimicrobianos
+- hospital_stay
 date_columns:
 - dob
 - date_procedure_1
