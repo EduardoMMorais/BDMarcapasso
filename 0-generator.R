@@ -1,9 +1,9 @@
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 SHUTDOWN <- FALSE
-RUN_ALL <- FALSE
+RUN_ALL <- TRUE
 
-START = 4
+START = 1
 FINISH = length(outcome_columns)
 
 if (RUN_ALL) {
@@ -54,7 +54,7 @@ outcome_columns = setdiff(
 )
 
 for (outcome_column in outcome_columns[START:FINISH]) {
-  cat(sprintf("Running %s", outcome_column))
+  cat(sprintf("Running %s\n", outcome_column))
   dir.create(file.path(paste0('./results/', outcome_column)),
              showWarnings = FALSE)
 

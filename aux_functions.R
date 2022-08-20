@@ -63,3 +63,35 @@ validation = function(model_fit, new_data, plot=TRUE) {
   
   return(pROC_obj)
 }
+
+extract_vip <- function(fit_tidymodels, pred_wrapper = predict,
+                        reference_class = "0", nsim = 5, 
+                        use_matrix = TRUE, method = "permute") {
+  fit_parsnip <- fit_tidymodels %>%
+    extract_fit_parsnip()
+  
+  # fit_parsnip %>%
+  #   vip(geom = "point")
+  
+  trained_rec <- extract_recipe(fit_tidymodels)
+  
+  df_train_baked <- bake(trained_rec, new_data = df_train)
+  df_train_baked[[outcome_column]] <- df_train_baked[[outcome_column]] %>% as.character() %>% as.numeric()
+  matrix_train <- as.matrix(df_train_baked) 
+  
+  if (use_matrix) {
+    data_train <- matrix_train
+  } else {
+    data_train <- df_train_baked
+  }
+  
+  if (method == 'permute') {
+    vip(fit_parsnip, train = data_train, method = method,
+        target = outcome_column, metric = "auc", reference_class = reference_class,
+        nsim = nsim, pred_wrapper = pred_wrapper, geom = "boxplot", all_permutations = TRUE,
+        mapping = aes_string(fill = "Variable"),
+        aesthetics = list(color = "grey35"))
+  } else {
+    vi_model(fit_parsnip) %>% vip
+  }
+}

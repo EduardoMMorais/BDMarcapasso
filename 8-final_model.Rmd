@@ -462,10 +462,12 @@ df_test_baked <- bake(trained_rec, new_data = df_test)
 matrix_train <- as.matrix(df_train_baked %>% select(-all_of(outcome_column)))
 matrix_test <- as.matrix(df_test_baked %>% select(-all_of(outcome_column)))
 
-shap.plot.summary.wrap1(model = lightgbm_model, X = matrix_train, top_n = 10, dilute = F)
+n_plots <- min(5, length(selected_features))
+
+shap.plot.summary.wrap1(model = lightgbm_model, X = matrix_train,
+                        top_n = n_plots, dilute = F)
 
 shap <- shap.prep(lightgbm_model, X_train = matrix_test)
-n_plots <- min(5, length(selected_features))
 
 for (x in shap.importance(shap, names_only = TRUE)[1:n_plots]) {
   p <- shap.plot.dependence(
@@ -498,11 +500,11 @@ df_auc <- tibble::tribble(
   'Tuned Upsample Model', upsample_results$auc, upsample_results$auc_lower, upsample_results$auc_upper, length(selected_features)
 ) %>% 
   mutate(Target = outcome_column,
-         Model = fct_reorder(paste0(Model, "-", Features), -Features))
+         `Model (features)` = fct_reorder(paste0(Model, "-", Features), -Features))
 
 df_auc %>%
   ggplot(aes(
-    x = Model,
+    x = `Model (features)`,
     y = AUC,
     ymin = `Lower Limit`,
     ymax = `Upper Limit`

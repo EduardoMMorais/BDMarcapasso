@@ -148,7 +148,8 @@ xgboost_spec <- boost_tree(
   learn_rate = tune(),
   loss_reduction = tune()
 ) %>%
-  set_engine("xgboost") %>%
+  set_engine("xgboost",
+             nthread = 8) %>%
   set_mode("classification")
 
 xgboost_grid <- grid_latin_hypercube(
@@ -177,18 +178,7 @@ xgboost_tune %>%
 best_xgboost <- xgboost_tune %>%
   select_best("roc_auc")
 
-xgboost_tune %>%
-  collect_metrics() %>%
-  filter(.metric == "roc_auc") %>%
-  select(mean, mtry:trees) %>%
-  pivot_longer(mtry:trees,
-               values_to = "value",
-               names_to = "parameter"
-  ) %>%
-  ggplot(aes(value, mean, color = parameter)) +
-  geom_point(alpha = 0.8, show.legend = FALSE) +
-  facet_wrap(~parameter, scales = "free_x") +
-  labs(x = NULL, y = "AUC")
+autoplot(xgboost_tune, metric = "roc_auc")
 
 final_xgboost_workflow <-
   xgboost_workflow %>%
@@ -202,10 +192,8 @@ final_xgboost_fit <- extract_workflow(last_xgboost_fit)
 
 xgboost_auc <- validation(final_xgboost_fit, df_test)
 
-final_xgboost_fit %>%
-  fit(data = df_train) %>%
-  extract_fit_parsnip() %>%
-  vip(geom = "point")
+extract_vip(final_xgboost_fit, pred_wrapper = predict,
+            reference_class = "0")
 
 xgboost_parameters <- xgboost_tune %>%
   show_best("roc_auc", n = 1) %>%
@@ -240,7 +228,8 @@ lightgbm_spec <- boost_tree(
   loss_reduction = tune(),
   sample_size = 1
 ) %>%
-  set_engine("lightgbm") %>%
+  set_engine("lightgbm",
+             nthread = 8) %>%
   set_mode("classification")
 
 lightgbm_grid <- grid_latin_hypercube(
@@ -269,18 +258,7 @@ lightgbm_tune %>%
 best_lightgbm <- lightgbm_tune %>%
   select_best("roc_auc")
 
-lightgbm_tune %>%
-  collect_metrics() %>%
-  filter(.metric == "roc_auc") %>%
-  select(mean, mtry:tree_depth) %>%
-  pivot_longer(mtry:tree_depth,
-               values_to = "value",
-               names_to = "parameter"
-  ) %>%
-  ggplot(aes(value, mean, color = parameter)) +
-  geom_point(alpha = 0.8, show.legend = FALSE) +
-  facet_wrap(~parameter, scales = "free_x") +
-  labs(x = NULL, y = "AUC")
+autoplot(lightgbm_tune, metric = "roc_auc")
 
 final_lightgbm_workflow <-
   lightgbm_workflow %>%
@@ -293,6 +271,10 @@ last_lightgbm_fit <-
 final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
 
 lightgbm_auc <- validation(final_lightgbm_fit, df_test)
+
+pfun_lightgbm <- function(object, newdata) predict(object, data = newdata)
+extract_vip(final_lightgbm_fit, pred_wrapper = pfun_lightgbm,
+            reference_class = "1")
 
 lightgbm_parameters <- lightgbm_tune %>%
   show_best("roc_auc", n = 1) %>%
@@ -361,7 +343,13 @@ last_glmnet_fit <-
 final_glmnet_fit <- extract_workflow(last_glmnet_fit)
 
 glmnet_auc <- validation(final_glmnet_fit, df_test)
+
+pfun_glmnet <- function(object, newdata) predict(object, newx = newdata)
+
+extract_vip(final_glmnet_fit, pred_wrapper = pfun_glmnet,
+            reference_class = "1", method = 'model')
 ```
+
 # Decision Tree
 
 ```{r results=F}
@@ -416,13 +404,17 @@ last_tree_fit <-
 
 final_tree_fit <- extract_workflow(last_tree_fit)
 
-tree_auc = validation(final_tree_fit, df_test)
+tree_auc <- validation(final_tree_fit, df_test)
 
 if (tree_auc$auc > 0.55) {
   final_tree_fit %>% 
     extract_fit_parsnip() %>% 
     vip() 
 }
+
+extract_vip(final_tree_fit, pred_wrapper = predict,
+            reference_class = "0", use_matrix = FALSE,
+            method = 'model')
 ```
 
 # Random Forest
@@ -443,7 +435,9 @@ rf_spec <-
               trees = tune(),
               min_n = tune()) %>%
   set_mode("classification") %>%
-  set_engine("ranger") 
+  set_engine("randomForest", 
+             probability = TRUE,
+             nthread = 8) 
 
 rf_grid <- grid_latin_hypercube(mtry(range = c(1L, 20L)),
                                 trees(range = c(100L, 300L)),
@@ -482,6 +476,12 @@ last_rf_fit <-
 final_rf_fit <- extract_workflow(last_rf_fit)
 
 rf_auc <- validation(final_rf_fit, df_test)
+
+pfun_rf <- function(object, newdata) predict(object, data = newdata)
+
+extract_vip(final_rf_fit, pred_wrapper = predict,
+            reference_class = "1", use_matrix = FALSE, 
+            method = 'model')
 ```
 
 # KNN
