@@ -1,6 +1,18 @@
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+library(yaml)
+columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
-SHUTDOWN <- TRUE
+outcome_columns = setdiff(
+  columns_list$outcome_columns,
+  c(
+    'death_intraop',
+    'death_hospitalar',
+    'death_readmission',
+    'death'
+  )
+)
+
+SHUTDOWN <- FALSE
 RUN_ALL <- TRUE
 
 START = 1
@@ -40,18 +52,6 @@ if (RUN_ALL) {
     quiet = TRUE
   )
 }
-
-columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
-
-outcome_columns = setdiff(
-  columns_list$outcome_columns,
-  c(
-    'death_intraop',
-    'death_hospitalar',
-    'death_readmission',
-    'death'
-  )
-)
 
 for (outcome_column in outcome_columns[START:FINISH]) {
   cat(sprintf("Running %s\n", outcome_column))
