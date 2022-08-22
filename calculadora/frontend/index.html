@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Calculadora de risco de readmissão e mortalidade após operação de instalação de marcapasso</title>
+    <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <link rel="stylesheet" href="css/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/style.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet"> 
+  </head>
+
+  <body>
+    <div class="container-fluid">
+      <h1 class="titulo">Calculadora de risco de readmissão e mortalidade após operação de instalação de marcapasso</h1>
+      <div class="row">
+        <div class="col-sm-4">
+          <form class="dados" role="complementary" id="dados">
+            <!-- Início código gerado -->
+            <div class="mb-3">
+              <label for="age" class="form-label">Idade</label>
+              <input type="number" class="form-control" id="age" name="age" value="18">
+            </div>
+            <!-- Fim código gerado -->
+            <button id="btngo" type="button" class="btn btn-secondary">Calcular</button>
+          </form>
+        </div>
+        <div class="col-sm-8" role="main" id="resultados">
+          <div class="spinner-border" role="status" id="spinner">
+            <span class="visually-hidden">Carregando...</span>
+          </div>
+          <div class="resultados" id="tab-resultados">
+            <div class="resultado">
+              <h2>Resultado</h2>
+              <p>
+                <strong>Risco de readmissão em 30 dias:</strong> <span id="risco-readmissao30"></span>
+              </p>
+            </div>
+        </div>
+      </div>
+    </div>
+    <script src="js/script.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+  </body>
+</html>

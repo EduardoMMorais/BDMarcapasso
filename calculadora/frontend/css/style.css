@@ -1,0 +1,24 @@
+body {
+    font-family: "Lato","Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+
+.titulo {
+    margin-top: 0.5em;
+}
+
+.dados {
+    min-height: 20px;
+    padding: 19px;
+    margin-bottom: 20px;
+    background-color: #ecf0f1;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+#spinner {
+    display: none;
+}
+
+#tab-resultados {
+    display: none;
+}
