@@ -72,21 +72,6 @@ df %>%
   geom_errorbar(position = position_dodge(width = 0.9)) +
   theme(legend.position = "bottom")
 
-# df %>%
-#   ggplot(
-#     aes(
-#       x = Period,
-#       y = AUC,
-#       ymin = `Lower Limit`,
-#       ymax = `Upper Limit`,
-#       group = Model,
-#       colour = Model
-#     )
-#   ) +
-#   facet_grid(~Target, scales = "free_x") + 
-#   geom_line() + 
-#   theme(legend.position = "bottom")
-
 df %>%
   filter(Target == 'Readmission') %>%
   select(Period, Model, AUC, `Lower Limit`, `Upper Limit`) %>%
@@ -112,31 +97,42 @@ for (file in list.files(path)) {
 }
 
 df <- df %>%
-  mutate(Period = gsub(".*_", "", Target),
-         Target = gsub("_.*", "", Target) %>% str_to_title,
-         Period = factor(
-           Period,
-           levels = c(
-             '30d',
-             '30days',
-             '60d',
-             '180d',
-             '180days',
-             '1year',
-             '2year',
-             '3year'
-           ),
-           labels = c(
-             '30 days',
-             '30 days',
-             '60 days',
-             '180 days',
-             '180 days',
-             '1 year',
-             '2 years',
-             '3 years'
-           )
-         ))
+  mutate(
+    Period = gsub(".*_", "", Target),
+    Target = gsub("_.*", "", Target) %>% str_to_title,
+    Period = factor(
+      Period,
+      levels = c(
+        '30d',
+        '30days',
+        '60d',
+        '180d',
+        '180days',
+        '1year',
+        '2year',
+        '3year'
+      ),
+      labels = c(
+        '30 days',
+        '30 days',
+        '60 days',
+        '180 days',
+        '180 days',
+        '1 year',
+        '2 years',
+        '3 years'
+      )
+    ),
+    Model = factor(
+      Model,
+      levels = c(
+        'Full Model',
+        'Trimmed Model',
+        'Feature Selected Model',
+        'Tuned Standard Model'
+      )
+    )
+  )
 
 df %>%
   ggplot(aes(
@@ -150,21 +146,6 @@ df %>%
   geom_point(position = position_dodge(width = 0.9)) +
   geom_errorbar(position = position_dodge(width = 0.9)) +
   theme(legend.position = "bottom")
-
-# df %>%
-#   ggplot(
-#     aes(
-#       x = Period,
-#       y = AUC,
-#       ymin = `Lower Limit`,
-#       ymax = `Upper Limit`,
-#       group = Model,
-#       colour = Model
-#     )
-#   ) +
-#   facet_grid(~Target, scales = "free") + 
-#   geom_line() + 
-#   theme(legend.position = "bottom")
 
 df %>%
   filter(Target == 'Readmission') %>%
