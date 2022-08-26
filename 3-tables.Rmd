@@ -77,7 +77,7 @@ for (column in columns_list$numerical_columns){
 # Categorical variables
 
 ```{r}
-paste_matrix <- function(...,sep = " ",collapse = NULL){
+paste_matrix <- function(...,sep = " ", collapse = NULL){
     n <- max(sapply(list(...),nrow))
     p <- max(sapply(list(...),ncol))
 
@@ -88,8 +88,8 @@ paste_matrix <- function(...,sep = " ",collapse = NULL){
 ```{r}
 percent <- function(x) paste0("(", lapply(x, as.character), "%)")
 
-addpercentage <- function(df, horizontal = FALSE){
-  if (horizontal){
+addpercentage <- function(df, horizontal = FALSE) {
+  if (horizontal) {
     x <- df %>%
       prop.table(margin = 1) %>%
       addmargins(FUN = list(Total = sum), quiet = TRUE) %>%
@@ -123,7 +123,7 @@ addpercentage <- function(df, horizontal = FALSE){
 transpose_columns <- c()
 df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], as.character)
 
-for (column in columns_list$categorical_columns){
+for (column in columns_list$categorical_columns) {
   if (length(unique(df[[column]])) > 5) next
   
   variable_name <- df_names %>%
@@ -138,7 +138,7 @@ for (column in columns_list$categorical_columns){
                      str_replace(outcome_column, "_", " "),
                      variable_name)
 
-  if (column %in% transpose_columns){
+  if (column %in% transpose_columns) {
     
     temp_table <- table(df[[column]],
                         df[[outcome_column]],
@@ -147,13 +147,13 @@ for (column in columns_list$categorical_columns){
     
     has_na <- df[[column]] %>% is.na() %>% sum > 0
     
-    if (has_na){
+    if (has_na) {
       rownames(temp_table)[nrow(temp_table) - 1] <- "NA"
     }
     
     t <- temp_table %>%
       as.data.frame %>%
-      rownames_to_column(var=abbreviated_name) %>%
+      rownames_to_column(var = abbreviated_name) %>%
       kbl(align = "c", booktabs = T, digits = 2, format = 'latex',
           caption = caption) %>%
       row_spec(length(unique(df %>% .[[column]] %>% replace_na("NA"))), 
@@ -173,13 +173,13 @@ for (column in columns_list$categorical_columns){
     
     has_na <- df[[column]] %>% is.na() %>% sum > 0
     
-    if (has_na){
+    if (has_na) {
       colnames(temp_table)[ncol(temp_table) - 1] <- "NA"
     }
     
     t <- temp_table %>%
       as.data.frame %>%
-      rownames_to_column(var=outcome_column) %>%
+      rownames_to_column(var = outcome_column) %>%
       kbl(align = "c", booktabs = T, digits = 2, format = 'latex',
           caption = caption, label = i) %>%
       row_spec(2, hline_after = T) %>%
