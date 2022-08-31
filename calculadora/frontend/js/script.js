@@ -3,7 +3,7 @@ document.getElementById('btngo').onclick = function() {
         spinner = document.getElementById('spinner'),
         resultados = document.getElementById('resultados');
     spinner.style.display = 'block';
-    fetch('http://localhost:8080/calcula', {
+    fetch('http://127.0.0.1:8081/custom/marcapasso', {
         'method': 'POST',
         'headers': {
             "Content-Type": "application/x-www-form-urlencoded",
@@ -11,7 +11,7 @@ document.getElementById('btngo').onclick = function() {
         'body': new URLSearchParams(new FormData(dadosForm))
         }).then((response) => response.json())
         .then((data) => {
-            document.getElementById('risco-readmissao30').innerHTML = data.readmission_30d;
+            document.getElementById('risco-readmissao30').innerHTML = data.readmission_30d.toLocaleString('pt-BR', {'minimumFractionDigits':2, 'maximumFractionDigits':2});
             document.getElementById('tab-resultados').style.display = 'block';
         }).catch((x) => {
             const errorMessage = document.createElement("div");
@@ -22,5 +22,6 @@ document.getElementById('btngo').onclick = function() {
         }).finally(() => {
             spinner.style.display = 'none';
         });
+    document.getElementById('resultados').scrollIntoView();
 
 }
