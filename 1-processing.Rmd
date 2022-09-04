@@ -193,4 +193,7 @@ saveRDS(df_names, "dataset/processed_dictionary.rds")
 
 save(df, file = "dataset/processed_data.RData")
 save(df_names, file = "dataset/processed_dictionary.RData")
+
+write.csv(df, file = "dataset/processed_data.csv", row.names = FALSE)
+write.csv(df_names, file = "dataset/processed_dictionary.csv", row.names = FALSE)
 ```

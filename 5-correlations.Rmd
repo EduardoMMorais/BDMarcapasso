@@ -5,7 +5,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: readmission_30d
+  outcome_column: death_3year
   threshold: 0.1
 title: "`r paste('Correlations -', params$outcome_column)`"
 ---
@@ -241,6 +241,14 @@ saveRDS(significant_cat_cols,
 
 saveRDS(significant_num_cols,
         file = sprintf("./auxiliar/significant_columns/numerical_%s.rds", outcome_column))
+
+con <- file(sprintf("./auxiliar/significant_columns/categorical_%s.yaml", outcome_column), "w")
+write_yaml(significant_cat_cols, con)
+close(con)
+
+con <- file(sprintf("./auxiliar/significant_columns/numerical_%s.yaml", outcome_column), "w")
+write_yaml(significant_num_cols, con)
+close(con)
 ```
 
 ```{r echo=F, results==F}
@@ -248,5 +256,8 @@ print(length(columns_list$categorical_columns))
 print(length(significant_cat_cols))
 print(length(columns_list$numerical_columns))
 print(length(significant_num_cols))
+
+cat(paste(shQuote(significant_cat_cols, type = "cmd"), collapse = ", "))
+cat(paste(shQuote(significant_num_cols, type = "cmd"), collapse = ", "))
 ```
 
