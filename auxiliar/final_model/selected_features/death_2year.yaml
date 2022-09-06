@@ -1,6 +1,7 @@
 - sex
 - age
 - education_level
+- underlying_heart_disease
 - heart_disease
 - hypertension
 - prior_mi
@@ -13,6 +14,7 @@
 - stroke
 - comorbidities_count
 - procedure_type_1
+- reop_type_1
 - cied_final_1
 - cied_final_group_1
 - admission_pre_t0_count

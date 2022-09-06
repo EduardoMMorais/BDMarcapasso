@@ -5,7 +5,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: death_3year
+  outcome_column: readmission_30d
   threshold: 0.1
 title: "`r paste('Correlations -', params$outcome_column)`"
 ---
@@ -205,32 +205,6 @@ df_chisq %>%
                                `p-value` < 0.001 ~ sprintf('< 0%s001', getOption("OutDec")), 
                                TRUE ~ as.character(round(`p-value`, 3)))) %>%
   niceFormatting(caption = "Chi-squared test", label = 6)
-```
-
-```{r echo=F, eval=F}
-variable = 'sex'
-outcome_column = 'readmission_30d'
-chisq.test(df[[outcome_column]], 
-           df[[variable]] %>% replace_na('NA'), # counting NA as cat
-           simulate.p.value = TRUE)
-
-variable = 'sex'
-outcome_column = 'readmission_60d'
-chisq.test(df[[outcome_column]], 
-           df[[variable]] %>% replace_na('NA'), # counting NA as cat
-           simulate.p.value = TRUE)
-
-variable = 'sex'
-outcome_column = 'readmission_180d'
-chisq.test(df[[outcome_column]], 
-           df[[variable]] %>% replace_na('NA'), # counting NA as cat
-           simulate.p.value = TRUE)
-
-variable = 'sex'
-outcome_column = 'readmission_1year'
-chisq.test(df[[outcome_column]], 
-           df[[variable]] %>% replace_na('NA'), # counting NA as cat
-           simulate.p.value = TRUE)
 ```
 
 ```{r}

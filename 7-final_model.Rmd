@@ -1,0 +1,553 @@
+---
+author: "Eduardo Yuki Yada"
+geometry: margin=1cm
+output: 
+  pdf_document:
+    template: latex-template.tex
+params:
+  outcome_column: readmission_60d
+  features_list: !r c()
+title: "`r paste('Final Model -', params$outcome_column)`"
+---
+
+```{r, include=FALSE}
+knitr::knit_hooks$set(time_it = local({
+  now <- NULL
+  function(before, options) {
+    if (before) {
+      # record the current time before each chunk
+      now <<- Sys.time()
+    } else {
+      # calculate the time difference after a chunk
+      res <- difftime(Sys.time(), now, units = "mins")
+      # return a character string to show the time
+      paste("Minutes to run:", round(res, 3))
+    }
+  }
+}))
+
+knitr::opts_chunk$set(
+  warning = F,
+  message = F
+)
+```
+
+# Global parameters
+
+```{r}
+k <- 5 # Number of folds for cross validation
+grid_size <- 30 # Number of parameter combination to tune on each model
+max_auc_loss <- 0.01 # Max accepted loss of AUC for reducing num of features
+```
+
+# Imports
+
+```{r warning=F, message=F}
+library(tidyverse)
+library(yaml)
+library(tidymodels)
+library(usemodels) 
+library(vip)
+library(kableExtra)
+library(SHAPforxgboost)
+library(xgboost)
+library(Matrix)
+library(mltools)
+library(bonsai)
+library(lightgbm)
+library(pROC)
+library(caret)
+library(themis)
+
+source("aux_functions.R")
+
+select <- dplyr::select
+```
+
+# Loading data
+
+```{r}
+load('dataset/processed_data.RData') 
+load('dataset/processed_dictionary.RData') 
+
+columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
+
+outcome_column <- params$outcome_column
+features_list <- params$features_list
+
+df[columns_list$outcome_columns] <- lapply(df[columns_list$outcome_columns], factor)
+df <- mutate(df, across(where(is.character), as.factor))
+```
+
+```{r}
+dir.create(file.path("./auxiliar/final_model/hyperparameters/"),
+           showWarnings = FALSE, 
+           recursive = TRUE)
+
+dir.create(file.path("./auxiliar/final_model/performance/"),
+           showWarnings = FALSE, 
+           recursive = TRUE)
+
+dir.create(file.path("./auxiliar/final_model/selected_features/"),
+           showWarnings = FALSE, 
+           recursive = TRUE)
+```
+
+# Eligible features
+
+```{r}
+cat_features_list = readRDS(sprintf(
+  "./auxiliar/significant_columns/categorical_%s.rds",
+  outcome_column
+))
+
+num_features_list = readRDS(sprintf(
+  "./auxiliar/significant_columns/numerical_%s.rds",
+  outcome_column
+))
+
+features_list = c(cat_features_list, num_features_list)
+```
+
+```{r}
+eligible_columns <- df_names %>%
+  filter(momento.aquisicao == 'Admissão t0') %>%
+  .$variable.name
+
+exception_columns <- c('death_intraop', 'death_intraop_1', 'disch_outcomes_t0')
+
+correlated_columns = c('year_procedure_1', # com year_adm_t0
+                       'age_surgery_1', # com age
+                       'admission_t0', # com admission_pre_t0_count
+                       'atb', # com meds_antimicrobianos
+                       'classe_meds_cardio_qtde', # com classe_meds_qtde
+                       'suporte_hemod', # com proced_invasivos_qtde,
+                       'radiografia', # com exames_imagem_qtde
+                       'ecg' # com metodos_graficos_qtde
+                       )
+
+eligible_features <- eligible_columns %>%
+  base::intersect(c(columns_list$categorical_columns, columns_list$numerical_columns)) %>%
+  setdiff(c(exception_columns, correlated_columns))
+
+if (is.null(features_list)) {
+  features = eligible_features
+} else {
+  features = base::intersect(eligible_features, features_list)
+}
+```
+
+Starting features:
+
+```{r results='asis'}
+gluedown::md_order(features, seq = TRUE, pad = TRUE)
+```
+
+# Train test split (70%/30%)
+
+```{r}
+set.seed(42)
+
+if (outcome_column == 'readmission_30d') {
+  df_split <- readRDS("dataset/split_object.rds")
+} else {
+  df_split <- initial_split(df, prop = .7, strata = all_of(outcome_column))
+}
+
+df_train <- training(df_split) %>% select(all_of(c(features, outcome_column)))
+df_test <- testing(df_split) %>% select(all_of(c(features, outcome_column)))
+
+df_folds <- vfold_cv(df_train, v = k,
+                     strata = all_of(outcome_column))
+```
+
+# Feature Selection
+
+```{r}
+model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
+  model_recipe <- 
+    recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
+           data = df_train %>% select(all_of(c(features, outcome_column)))) %>% 
+    step_novel(all_nominal_predictors()) %>% 
+    step_unknown(all_nominal_predictors()) %>%
+    step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") 
+  
+  model_spec <-
+    do.call(boost_tree, hyperparameters) %>%
+    set_engine("lightgbm") %>%
+    set_mode("classification")
+  
+  model_workflow <-
+    workflow() %>%
+    add_recipe(model_recipe) %>%
+    add_model(model_spec)
+  
+  model_fit_rs <- model_workflow %>% 
+    fit_resamples(df_folds)
+  
+  model_fit <- model_workflow %>% 
+    fit(df_train)
+  
+  model_auc <- validation(model_fit, df_test, plot = F)
+
+  raw_model <- parsnip::extract_fit_engine(model_fit)
+
+  feature_importance <- lgb.importance(raw_model, percentage = TRUE)
+  
+  cv_results <- collect_metrics(model_fit_rs) %>% filter(.metric == 'roc_auc') 
+  
+  return(
+    list(
+      cv_auc =  cv_results$mean,
+      cv_auc_std_err = cv_results$std_err,
+      importance = feature_importance,
+      auc = as.numeric(model_auc$auc),
+      auc_lower = model_auc$ci[1],
+      auc_upper = model_auc$ci[3]
+    )
+  )
+}
+```
+
+```{r}
+hyperparameters <- readRDS(
+  sprintf(
+    "./auxiliar/model_selection/hyperparameters/lightgbm_%s.rds",
+    outcome_column
+  )
+)
+
+hyperparameters$sample_size <- 1 
+
+full_model <- model_fit_wf(df_train, features, outcome_column, hyperparameters)
+
+sprintf('Full Model CV Train AUC: %.3f' ,full_model$cv_auc)
+sprintf('Full Model Test AUC: %.3f' ,full_model$auc)
+```
+
+Features with zero importance on the initial model:
+
+```{r results='asis'}
+unimportant_features <- setdiff(features, full_model$importance$Feature)
+
+unimportant_features %>%
+  gluedown::md_order()
+```
+
+```{r}
+trimmed_features <- full_model$importance$Feature
+hyperparameters$mtry <- min(hyperparameters$mtry, length(trimmed_features))
+trimmed_model <- model_fit_wf(df_train, trimmed_features,
+                              outcome_column, hyperparameters)
+
+sprintf('Trimmed Model CV Train AUC: %.3f' ,trimmed_model$cv_auc)
+sprintf('Trimmed Model Test AUC: %.3f' ,trimmed_model$auc)
+```
+
+```{r}
+selection_results <- tibble::tribble(
+  ~`Tested Feature`, ~`Dropped`, ~`Number of Features`, ~`CV AUC`, ~`CV AUC Std Error`, ~`Total AUC Loss`, ~`Instant AUC Loss`,
+  'None', TRUE, length(features), full_model$cv_auc, full_model$cv_auc_std_err, 0, 0
+)
+
+whitelist <- c()
+
+if (full_model$cv_auc - trimmed_model$cv_auc < max_auc_loss) {
+  current_features <- trimmed_features
+  current_model <- trimmed_model
+  current_auc_loss <- full_model$cv_auc - current_model$cv_auc
+  instant_auc_loss <- full_model$cv_auc - current_model$cv_auc
+    
+  selection_results <- selection_results %>%
+    add_row(`Tested Feature` = 'All unimportant',
+            `Dropped` = TRUE,
+            `Number of Features` = length(trimmed_features),
+            `CV AUC` = current_model$cv_auc,
+            `CV AUC Std Error` = current_model$cv_auc_std_err,
+            `Total AUC Loss` = current_auc_loss,
+            `Instant AUC Loss` = instant_auc_loss)
+} else {
+  current_features <- features
+  current_model <- full_model
+  current_auc_loss <- 0
+}
+
+while (current_auc_loss < max_auc_loss | mean(current_features %in% whitelist) == 1) {
+  current_least_important <-
+    tail(setdiff(current_model$importance$Feature, whitelist), 1)
+  test_features <-
+    setdiff(current_features, current_least_important)
+  hyperparameters$mtry <-
+    min(hyperparameters$mtry, length(test_features))
+  current_model <-
+    model_fit_wf(df_train, test_features, outcome_column, hyperparameters)
+  instant_auc_loss <-
+    tail(selection_results %>% filter(Dropped) %>% .$`CV AUC`, n = 1) - current_model$cv_auc
+  current_auc_loss <- full_model$cv_auc - current_model$cv_auc
+  
+  if (instant_auc_loss < max_auc_loss / 5 &
+      current_auc_loss < max_auc_loss) {
+    dropped <- TRUE
+    current_features <- test_features
+  } else {
+    dropped <- FALSE
+    whitelist <- c(whitelist, current_least_important)
+  }
+  
+  selection_results <- selection_results %>%
+    add_row(
+      `Tested Feature` = current_least_important,
+      `Dropped` = dropped,
+      `Number of Features` = length(test_features),
+      `CV AUC` = current_model$cv_auc,
+      `CV AUC Std Error` = current_model$cv_auc_std_err,
+      `Total AUC Loss` = current_auc_loss,
+      `Instant AUC Loss` = instant_auc_loss
+    )
+  
+  print(c(
+    length(current_features),
+    round(current_auc_loss, 4),
+    round(instant_auc_loss, 4),
+    current_least_important
+  ))
+}
+
+selection_results %>% 
+  rename(Features = `Number of Features`) %>%
+  niceFormatting(digits = 4, label = 1)
+```
+
+
+```{r}
+if (exists('last_feature_dropped')) {
+  selected_features <- c(current_features, last_feature_droped)
+} else {
+  selected_features <- current_features
+}
+
+con <- file(sprintf('./auxiliar/final_model/selected_features/%s.yaml', outcome_column), "w")
+write_yaml(selected_features, con)
+close(con)
+
+feature_selected_model <- model_fit_wf(df_train, selected_features,
+                                       outcome_column, hyperparameters)
+
+sprintf('Selected Model CV Train AUC: %.3f', feature_selected_model$cv_auc)
+sprintf('Selected Model Test AUC: %.3f', feature_selected_model$auc)
+
+ selection_results <- selection_results %>%
+  filter(`Number of Features` < length(features)) %>%
+  mutate(`Features Removed` = length(features) - `Number of Features`,
+         `CV AUC Low` = `CV AUC` - `CV AUC Std Error`,
+         `CV AUC High` = `CV AUC` + `CV AUC Std Error`)
+
+selection_results %>%
+  filter(Dropped) %>%
+  ggplot(aes(x = `Features Removed`, y = `CV AUC`,
+             ymin = `CV AUC Low`, ymax = `CV AUC High`)) + 
+  geom_line() + 
+  geom_ribbon(alpha = .3) + 
+  geom_hline(yintercept = full_model$cv_auc - max_auc_loss,
+             linetype = "dashed", color = "red")
+```
+
+# Hyperparameter tuning
+
+Selected features:
+
+```{r results='asis'}
+gluedown::md_order(selected_features, seq = TRUE, pad = TRUE)
+```
+
+## Standard
+
+```{r}
+lightgbm_recipe <-
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
+         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
+  step_novel(all_nominal_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
+  step_dummy(all_nominal_predictors()) 
+
+lightgbm_smote_recipe <-
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
+         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
+  step_novel(all_nominal_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_impute_mean(all_numeric_predictors()) %>%
+  step_smote(!!sym(outcome_column))
+
+lightgbm_upsample_recipe <-
+  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
+         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
+  step_novel(all_nominal_predictors()) %>% 
+  step_unknown(all_nominal_predictors()) %>%
+  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_upsample(!!sym(outcome_column))
+
+lightgbm_tuning <- function(recipe) {
+  
+  lightgbm_spec <- boost_tree(
+    mtry = tune(),
+    trees = tune(),
+    min_n = tune(),
+    tree_depth = tune(),
+    learn_rate = tune(),
+    loss_reduction = tune(),
+    sample_size = 1.0
+  ) %>%
+    set_engine("lightgbm") %>%
+    set_mode("classification")
+  
+  lightgbm_grid <- grid_latin_hypercube(
+    mtry(range = c(1L, length(selected_features))),
+    trees(range = c(100L, 300L)),
+    min_n(),
+    tree_depth(),
+    learn_rate(),
+    loss_reduction(),
+    size = grid_size
+  )
+  
+  lightgbm_workflow <-
+    workflow() %>%
+    add_recipe(recipe) %>%
+    add_model(lightgbm_spec)
+  
+  lightgbm_tune <-
+    lightgbm_workflow %>%
+    tune_grid(resamples = df_folds,
+              grid = lightgbm_grid)
+  
+  lightgbm_tune %>%
+    show_best("roc_auc") %>%
+    niceFormatting(digits = 5, label = 4)
+  
+  best_lightgbm <- lightgbm_tune %>%
+    select_best("roc_auc")
+  
+  lightgbm_tune %>%
+    collect_metrics() %>%
+    filter(.metric == "roc_auc") %>%
+    select(mean, mtry:tree_depth) %>%
+    pivot_longer(mtry:tree_depth,
+                 values_to = "value",
+                 names_to = "parameter"
+    ) %>%
+    ggplot(aes(value, mean, color = parameter)) +
+    geom_point(alpha = 0.8, show.legend = FALSE) +
+    facet_wrap(~parameter, scales = "free_x") +
+    labs(x = NULL, y = "AUC")
+  
+  final_lightgbm_workflow <-
+    lightgbm_workflow %>%
+    finalize_workflow(best_lightgbm)
+  
+  last_lightgbm_fit <-
+    final_lightgbm_workflow %>%
+    last_fit(df_split)
+  
+  final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
+  
+  lightgbm_auc <- validation(final_lightgbm_fit, df_test)
+  
+  lightgbm_parameters <- lightgbm_tune %>%
+    show_best("roc_auc", n = 1) %>%
+    select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
+    as.list
+  
+  return(list(auc = as.numeric(lightgbm_auc$auc),
+              auc_lower = lightgbm_auc$ci[1],
+              auc_upper = lightgbm_auc$ci[3],
+              parameters = lightgbm_parameters, 
+              fit = final_lightgbm_fit))
+}
+
+standard_results <- lightgbm_tuning(lightgbm_recipe)
+# smote_results <- lightgbm_tuning(lightgbm_smote_recipe)
+# upsample_results <- lightgbm_tuning(lightgbm_upsample_recipe)
+
+final_lightgbm_fit <- standard_results$fit
+lightgbm_parameters <- standard_results$parameters
+
+# saveRDS(
+#   lightgbm_parameters,
+#   file = sprintf(
+#     "./auxiliar/final_model/hyperparameters/lightgbm_%s.rds",
+#     outcome_column
+#   )
+# )
+```
+
+# SHAP values
+
+```{r warning=T, message=T}
+lightgbm_model <- parsnip::extract_fit_engine(final_lightgbm_fit)
+
+trained_rec <- prep(lightgbm_recipe, training = df_train)
+
+df_train_baked <- bake(trained_rec, new_data = df_train)
+df_test_baked <- bake(trained_rec, new_data = df_test)
+
+matrix_train <- as.matrix(df_train_baked %>% select(-all_of(outcome_column)))
+matrix_test <- as.matrix(df_test_baked %>% select(-all_of(outcome_column)))
+
+n_plots <- min(5, length(selected_features))
+
+shap.plot.summary.wrap1(model = lightgbm_model, X = matrix_train,
+                        top_n = n_plots, dilute = F)
+
+shap <- shap.prep(lightgbm_model, X_train = matrix_test)
+
+for (x in shap.importance(shap, names_only = TRUE)[1:n_plots]) {
+  p <- shap.plot.dependence(
+    shap,
+    x = x,
+    color_feature = "auto",
+    smooth = TRUE,
+    jitter_width = 0.01,
+    alpha = 0.3
+  ) +
+    labs(title = x)
+  print(p)
+}
+```
+
+```{r eval=F, echo=F}
+lightgbm_model$params
+```
+
+# Models Comparison
+
+```{r}
+df_auc <- tibble::tribble(
+  ~Model, ~`AUC`, ~`Lower Limit`, ~`Upper Limit`, ~`Features`,
+  'Full Model', full_model$auc, full_model$auc_lower, full_model$auc_upper, length(features),
+  'Trimmed Model', trimmed_model$auc, trimmed_model$auc_lower, trimmed_model$auc_upper, length(trimmed_features),
+  'Feature Selected Model', feature_selected_model$auc, feature_selected_model$auc_lower, feature_selected_model$auc_upper, length(selected_features),
+  'Tuned Standard Model', standard_results$auc, standard_results$auc_lower, standard_results$auc_upper, length(selected_features)
+  # 'Tuned Smote Model', smote_results$auc, smote_results$auc_lower, smote_results$auc_upper, length(selected_features),
+  # 'Tuned Upsample Model', upsample_results$auc, upsample_results$auc_lower, upsample_results$auc_upper, length(selected_features)
+) %>% 
+  mutate(Target = outcome_column,
+         `Model (features)` = fct_reorder(paste0(Model, "-", Features), -Features))
+
+df_auc %>%
+  ggplot(aes(
+    x = `Model (features)`,
+    y = AUC,
+    ymin = `Lower Limit`,
+    ymax = `Upper Limit`
+  )) +
+  geom_point() +
+  geom_errorbar() +
+  labs(title = outcome_column) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+saveRDS(df_auc, sprintf("./auxiliar/final_model/performance/%s.RData", outcome_column))
+```

@@ -3,5 +3,6 @@
 - admission_pre_t0_count
 - age
 - espironolactona
+- education_level
 - comorbidities_count
-- stroke
+- nyha_basal

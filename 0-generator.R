@@ -2,6 +2,10 @@ library(yaml)
 library(progress)
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+renv::activate()
+# renv::restore()
+
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_columns = setdiff(
@@ -14,13 +18,13 @@ outcome_columns = setdiff(
   )
 )
 
-SHUTDOWN <- FALSE
-RUN_ALL <- TRUE
+SHUTDOWN <- TRUE
+RUN_ALL <- FALSE
 
 START <- 1
-FINISH <- 1 #length(outcome_columns)
+FINISH <- length(outcome_columns)
 
-total <- 4 + 5 * (FINISH - START + 1) + 2
+total <- 4 + 5 * (FINISH - START + 1) + 1
 pb <- progress_bar$new(total = total)
 pb$tick(0)
 if (RUN_ALL) {
@@ -72,7 +76,7 @@ if (RUN_ALL) {
 }
 
 for (outcome_column in outcome_columns[START:FINISH]) {
-  cat(sprintf("Running %s\n", outcome_column))
+  cat(sprintf("\nRunning %s\n", outcome_column))
   dir.create(file.path(paste0('./results/', outcome_column)),
              showWarnings = FALSE)
 
@@ -83,7 +87,7 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     clean = TRUE,
     quiet = TRUE
   )
-  
+
   pb$tick()
 
   rmarkdown::render(
@@ -93,7 +97,7 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     clean = TRUE,
     quiet = TRUE
   )
-  
+
   pb$tick()
 
   rmarkdown::render(
@@ -118,19 +122,19 @@ for (outcome_column in outcome_columns[START:FINISH]) {
 
   features_list = c(cat_features_list, num_features_list)
 
-  rmarkdown::render(
-    '6-model_selection.Rmd',
-    params = list(outcome_column = outcome_column,
-                  features_list = features_list),
-    output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
-    clean = TRUE,
-    quiet = TRUE
-  )
+  # rmarkdown::render(
+  #   '6-model_selection.Rmd',
+  #   params = list(outcome_column = outcome_column,
+  #                 features_list = features_list),
+  #   output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
+  #   clean = TRUE,
+  #   quiet = TRUE
+  # )
   
   pb$tick()
 
   rmarkdown::render(
-    '8-final_model.Rmd',
+    '7-final_model.Rmd',
     params = list(outcome_column = outcome_column,
                   features_list = features_list),
     output_file = paste0('./results/', outcome_column, '/8-final_model.pdf'),
@@ -143,7 +147,7 @@ for (outcome_column in outcome_columns[START:FINISH]) {
 
 
 rmarkdown::render(
-  '7-model_selection_results.Rmd',
+  '8-modeling_results.Rmd',
   output_file = './results/7-model_selection_results.pdf',
   clean = TRUE,
   quiet = TRUE

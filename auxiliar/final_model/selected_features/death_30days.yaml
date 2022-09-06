@@ -37,6 +37,7 @@
 - classe_meds_qtde
 - meds_cardiovasc_qtde
 - meds_antimicrobianos
+- vni
 - ventilacao_mecanica
 - intervencao_cv
 - cateter_venoso_central
