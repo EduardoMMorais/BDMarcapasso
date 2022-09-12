@@ -447,6 +447,11 @@ lightgbm_parameters <- standard_results$parameters
 #     outcome_column
 #   )
 # )
+
+# Save the final model. We need it for the calculator
+lgb.save(parsnip::extract_fit_engine(final_lightgbm_fit), sprintf("./results/%s/final_model.txt", outcome_column))
+saveRDS(final_lightgbm_fit, sprintf("./results/%s/final_model_wf.rds", outcome_column))
+
 ```
 
 # SHAP values
