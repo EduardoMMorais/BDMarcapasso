@@ -17,11 +17,11 @@ outcome_columns = setdiff(
   )
 )
 
-SHUTDOWN <- TRUE
+SHUTDOWN <- FALSE
 RUN_ALL <- FALSE
 
-START <- 1
-FINISH <- length(outcome_columns)
+START <- 6
+FINISH <- 6 #length(outcome_columns)
 
 total <- 4 + 5 * (FINISH - START + 1) + 1
 pb <- progress_bar$new(total = total)
@@ -125,7 +125,7 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     '6-model_selection.Rmd',
     params = list(outcome_column = outcome_column,
                   features_list = features_list,
-                  k = 4,
+                  k = 5,
                   grid_size = 15,
                   repeats = 2),
     output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
@@ -139,7 +139,7 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     '7-final_model.Rmd',
     params = list(outcome_column = outcome_column,
                   features_list = features_list,
-                  k = 4,
+                  k = 5,
                   grid_size = 30,
                   repeats = 2),
     output_file = paste0('./results/', outcome_column, '/7-final_model.pdf'),

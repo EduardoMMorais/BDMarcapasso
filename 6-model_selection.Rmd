@@ -250,7 +250,7 @@ lightgbm_spec <- boost_tree(
   min_n = tune(),
   tree_depth = tune(),
   learn_rate = tune(),
-  loss_reduction = tune(),
+  # loss_reduction = tune(),
   sample_size = 1
 ) %>%
   set_engine("lightgbm",
@@ -261,8 +261,8 @@ lightgbm_grid <- grid_latin_hypercube(
   trees(range = c(50L, 300L)),
   min_n(),
   tree_depth(),
-  learn_rate(range = c(0.01, 0.3), trans = NULL),
-  loss_reduction(),
+  learn_rate(range = c(0.01, 0.2), trans = NULL),
+  # loss_reduction(),
   size = grid_size
 )
 
@@ -302,7 +302,7 @@ lightgbm_auc <- validation(final_lightgbm_fit, df_test)
 
 lightgbm_parameters <- lightgbm_tune %>%
   show_best("roc_auc", n = 1) %>%
-  select(trees, min_n, tree_depth, learn_rate, loss_reduction) %>%
+  select(trees, min_n, tree_depth, learn_rate) %>%
   as.list
 
 saveRDS(
