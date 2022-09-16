@@ -3,8 +3,7 @@ library(progress)
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
-renv::activate()
-# renv::restore()
+# renv::activate()
 
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
@@ -80,33 +79,33 @@ for (outcome_column in outcome_columns[START:FINISH]) {
   dir.create(file.path(paste0('./results/', outcome_column)),
              showWarnings = FALSE)
 
-  rmarkdown::render(
-    '3-tables.Rmd',
-    params = list(outcome_column = outcome_column),
-    output_file = paste0('./results/', outcome_column, '/3-tables.pdf'),
-    clean = TRUE,
-    quiet = TRUE
-  )
+  # rmarkdown::render(
+  #   '3-tables.Rmd',
+  #   params = list(outcome_column = outcome_column),
+  #   output_file = paste0('./results/', outcome_column, '/3-tables.pdf'),
+  #   clean = TRUE,
+  #   quiet = TRUE
+  # )
 
   pb$tick()
 
-  rmarkdown::render(
-    '4-plots.Rmd',
-    params = list(outcome_column = outcome_column),
-    output_file = paste0('./results/', outcome_column, '/4-plots.pdf'),
-    clean = TRUE,
-    quiet = TRUE
-  )
+  # rmarkdown::render(
+  #   '4-plots.Rmd',
+  #   params = list(outcome_column = outcome_column),
+  #   output_file = paste0('./results/', outcome_column, '/4-plots.pdf'),
+  #   clean = TRUE,
+  #   quiet = TRUE
+  # )
 
   pb$tick()
 
-  rmarkdown::render(
-    '5-correlations.Rmd',
-    params = list(outcome_column = outcome_column),
-    output_file = paste0('./results/', outcome_column, '/5-correlations.pdf'),
-    clean = TRUE,
-    quiet = TRUE
-  )
+  # rmarkdown::render(
+  #   '5-correlations.Rmd',
+  #   params = list(outcome_column = outcome_column),
+  #   output_file = paste0('./results/', outcome_column, '/5-correlations.pdf'),
+  #   clean = TRUE,
+  #   quiet = TRUE
+  # )
   
   pb$tick()
 
@@ -122,22 +121,28 @@ for (outcome_column in outcome_columns[START:FINISH]) {
 
   features_list = c(cat_features_list, num_features_list)
 
-  # rmarkdown::render(
-  #   '6-model_selection.Rmd',
-  #   params = list(outcome_column = outcome_column,
-  #                 features_list = features_list),
-  #   output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
-  #   clean = TRUE,
-  #   quiet = TRUE
-  # )
-  
+  rmarkdown::render(
+    '6-model_selection.Rmd',
+    params = list(outcome_column = outcome_column,
+                  features_list = features_list,
+                  k = 4,
+                  grid_size = 15,
+                  repeats = 2),
+    output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
+    clean = TRUE,
+    quiet = TRUE
+  )
+
   pb$tick()
 
   rmarkdown::render(
     '7-final_model.Rmd',
     params = list(outcome_column = outcome_column,
-                  features_list = features_list),
-    output_file = paste0('./results/', outcome_column, '/8-final_model.pdf'),
+                  features_list = features_list,
+                  k = 4,
+                  grid_size = 30,
+                  repeats = 2),
+    output_file = paste0('./results/', outcome_column, '/7-final_model.pdf'),
     clean = TRUE,
     quiet = TRUE
   )
@@ -148,7 +153,7 @@ for (outcome_column in outcome_columns[START:FINISH]) {
 
 rmarkdown::render(
   '8-modeling_results.Rmd',
-  output_file = './results/7-model_selection_results.pdf',
+  output_file = './results/8-modeling_results.pdf',
   clean = TRUE,
   quiet = TRUE
 )

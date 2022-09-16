@@ -5,8 +5,12 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: readmission_60d
+  outcome_column: readmission_30d
   features_list: !r c()
+  k: 5
+  grid_size: 10
+  max_auc_loss: 0.01
+  repeats: 2
 title: "`r paste('Final Model -', params$outcome_column)`"
 ---
 
@@ -35,9 +39,10 @@ knitr::opts_chunk$set(
 # Global parameters
 
 ```{r}
-k <- 5 # Number of folds for cross validation
-grid_size <- 30 # Number of parameter combination to tune on each model
-max_auc_loss <- 0.01 # Max accepted loss of AUC for reducing num of features
+k <- params$k # Number of folds for cross validation
+grid_size <- params$grid_size # Number of parameter combination to tune on each model
+max_auc_loss <- params$max_auc_loss # Max accepted loss of AUC for reducing num of features
+repeats <- params$repeats
 ```
 
 # Imports
@@ -158,19 +163,25 @@ df_train <- training(df_split) %>% select(all_of(c(features, outcome_column)))
 df_test <- testing(df_split) %>% select(all_of(c(features, outcome_column)))
 
 df_folds <- vfold_cv(df_train, v = k,
-                     strata = all_of(outcome_column))
+                     strata = all_of(outcome_column),
+                     repeats = repeats)
 ```
 
 # Feature Selection
 
 ```{r}
+custom_dummy_names <- function(var, lvl, ordinal = FALSE) {
+  dummy_names(var, lvl, ordinal = FALSE, sep = "__")
+} 
+
 model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
   model_recipe <- 
     recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
            data = df_train %>% select(all_of(c(features, outcome_column)))) %>% 
     step_novel(all_nominal_predictors()) %>% 
     step_unknown(all_nominal_predictors()) %>%
-    step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") 
+    step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
+    step_dummy(all_nominal_predictors(), naming = custom_dummy_names)
   
   model_spec <-
     do.call(boost_tree, hyperparameters) %>%
@@ -192,7 +203,12 @@ model_fit_wf <- function(df_train, features, outcome_column, hyperparameters){
 
   raw_model <- parsnip::extract_fit_engine(model_fit)
 
-  feature_importance <- lgb.importance(raw_model, percentage = TRUE)
+  feature_importance <- lgb.importance(raw_model, percentage = TRUE) %>%
+    separate(Feature, c("Feature","value"), "__", fill = 'right') %>%
+    group_by(Feature) %>%
+    summarise(Gain = sum(Gain), 
+              Cover = sum(Cover), 
+              Frequency = sum(Frequency))
   
   cv_results <- collect_metrics(model_fit_rs) %>% filter(.metric == 'roc_auc') 
   
@@ -225,6 +241,22 @@ sprintf('Full Model CV Train AUC: %.3f' ,full_model$cv_auc)
 sprintf('Full Model Test AUC: %.3f' ,full_model$auc)
 ```
 
+```{r}
+# full_model$importance %>%
+#   filter(str_detect(Feature, 'education'))
+# 
+# full_model$importance %>%
+#   filter(str_detect(Feature, 'education')) %>%
+#   summarise(across(where(is.numeric), ~ sum(.x, na.rm = TRUE)))
+# 
+# full_model$importance %>%
+#   separate(Feature, c("Feature","value"), "__") %>%
+#   group_by(Feature) %>%
+#   summarise(Gain = sum(Gain), 
+#             Cover = sum(Cover), 
+#             Frequency = sum(Frequency))
+```
+
 Features with zero importance on the initial model:
 
 ```{r results='asis'}
@@ -236,7 +268,6 @@ unimportant_features %>%
 
 ```{r}
 trimmed_features <- full_model$importance$Feature
-hyperparameters$mtry <- min(hyperparameters$mtry, length(trimmed_features))
 trimmed_model <- model_fit_wf(df_train, trimmed_features,
                               outcome_column, hyperparameters)
 
@@ -272,13 +303,17 @@ if (full_model$cv_auc - trimmed_model$cv_auc < max_auc_loss) {
   current_auc_loss <- 0
 }
 
-while (current_auc_loss < max_auc_loss | mean(current_features %in% whitelist) == 1) {
-  current_least_important <-
-    tail(setdiff(current_model$importance$Feature, whitelist), 1)
+while (current_auc_loss < max_auc_loss & mean(current_features %in% whitelist) < 1) {
+  zero_importance_features <- setdiff(current_features, current_model$importance$Feature) %>%
+    setdiff(whitelist)
+  if (length(zero_importance_features) > 0) {
+    current_least_important <- zero_importance_features[1] 
+  } else {
+    current_least_important <-
+      tail(setdiff(current_model$importance$Feature, whitelist), 1)
+  }
   test_features <-
     setdiff(current_features, current_least_important)
-  hyperparameters$mtry <-
-    min(hyperparameters$mtry, length(test_features))
   current_model <-
     model_fit_wf(df_train, test_features, outcome_column, hyperparameters)
   instant_auc_loss <-
@@ -371,29 +406,9 @@ lightgbm_recipe <-
   step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
   step_dummy(all_nominal_predictors()) 
 
-lightgbm_smote_recipe <-
-  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
-         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
-  step_novel(all_nominal_predictors()) %>% 
-  step_unknown(all_nominal_predictors()) %>%
-  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_impute_mean(all_numeric_predictors()) %>%
-  step_smote(!!sym(outcome_column))
-
-lightgbm_upsample_recipe <-
-  recipe(formula = sprintf("%s ~ .", outcome_column) %>% as.formula,
-         data = df_train %>% select(all_of(c(selected_features, outcome_column)))) %>%
-  step_novel(all_nominal_predictors()) %>% 
-  step_unknown(all_nominal_predictors()) %>%
-  step_other(all_nominal_predictors(), threshold = 0.05, other = ".merged") %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_upsample(!!sym(outcome_column))
-
 lightgbm_tuning <- function(recipe) {
   
   lightgbm_spec <- boost_tree(
-    mtry = tune(),
     trees = tune(),
     min_n = tune(),
     tree_depth = tune(),
@@ -405,11 +420,10 @@ lightgbm_tuning <- function(recipe) {
     set_mode("classification")
   
   lightgbm_grid <- grid_latin_hypercube(
-    mtry(range = c(1L, length(selected_features))),
-    trees(range = c(100L, 300L)),
+    trees(range = c(50L, 300L)),
     min_n(),
     tree_depth(),
-    learn_rate(),
+    learn_rate(range = c(0.01, 0.3), trans = NULL),
     loss_reduction(),
     size = grid_size
   )
@@ -431,18 +445,7 @@ lightgbm_tuning <- function(recipe) {
   best_lightgbm <- lightgbm_tune %>%
     select_best("roc_auc")
   
-  lightgbm_tune %>%
-    collect_metrics() %>%
-    filter(.metric == "roc_auc") %>%
-    select(mean, mtry:tree_depth) %>%
-    pivot_longer(mtry:tree_depth,
-                 values_to = "value",
-                 names_to = "parameter"
-    ) %>%
-    ggplot(aes(value, mean, color = parameter)) +
-    geom_point(alpha = 0.8, show.legend = FALSE) +
-    facet_wrap(~parameter, scales = "free_x") +
-    labs(x = NULL, y = "AUC")
+  autoplot(lightgbm_tune, metric = "roc_auc")
   
   final_lightgbm_workflow <-
     lightgbm_workflow %>%
@@ -458,7 +461,7 @@ lightgbm_tuning <- function(recipe) {
   
   lightgbm_parameters <- lightgbm_tune %>%
     show_best("roc_auc", n = 1) %>%
-    select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
+    select(trees, min_n, tree_depth, learn_rate, loss_reduction) %>%
     as.list
   
   return(list(auc = as.numeric(lightgbm_auc$auc),
@@ -469,19 +472,17 @@ lightgbm_tuning <- function(recipe) {
 }
 
 standard_results <- lightgbm_tuning(lightgbm_recipe)
-# smote_results <- lightgbm_tuning(lightgbm_smote_recipe)
-# upsample_results <- lightgbm_tuning(lightgbm_upsample_recipe)
 
 final_lightgbm_fit <- standard_results$fit
 lightgbm_parameters <- standard_results$parameters
 
-# saveRDS(
-#   lightgbm_parameters,
-#   file = sprintf(
-#     "./auxiliar/final_model/hyperparameters/lightgbm_%s.rds",
-#     outcome_column
-#   )
-# )
+saveRDS(
+  lightgbm_parameters,
+  file = sprintf(
+    "./auxiliar/final_model/hyperparameters/lightgbm_%s.rds",
+    outcome_column
+  )
+)
 ```
 
 # SHAP values
@@ -509,7 +510,7 @@ for (x in shap.importance(shap, names_only = TRUE)[1:n_plots]) {
     shap,
     x = x,
     color_feature = "auto",
-    smooth = TRUE,
+    smooth = FALSE,
     jitter_width = 0.01,
     alpha = 0.3
   ) +
@@ -518,7 +519,7 @@ for (x in shap.importance(shap, names_only = TRUE)[1:n_plots]) {
 }
 ```
 
-```{r eval=F, echo=F}
+```{r echo=F}
 lightgbm_model$params
 ```
 
@@ -531,8 +532,6 @@ df_auc <- tibble::tribble(
   'Trimmed Model', trimmed_model$auc, trimmed_model$auc_lower, trimmed_model$auc_upper, length(trimmed_features),
   'Feature Selected Model', feature_selected_model$auc, feature_selected_model$auc_lower, feature_selected_model$auc_upper, length(selected_features),
   'Tuned Standard Model', standard_results$auc, standard_results$auc_lower, standard_results$auc_upper, length(selected_features)
-  # 'Tuned Smote Model', smote_results$auc, smote_results$auc_lower, smote_results$auc_upper, length(selected_features),
-  # 'Tuned Upsample Model', upsample_results$auc, upsample_results$auc_lower, upsample_results$auc_upper, length(selected_features)
 ) %>% 
   mutate(Target = outcome_column,
          `Model (features)` = fct_reorder(paste0(Model, "-", Features), -Features))

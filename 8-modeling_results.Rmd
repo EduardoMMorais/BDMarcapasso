@@ -150,13 +150,13 @@ df %>%
 
 df %>%
   filter(Target == 'Readmission') %>%
-  select(Period, Model, AUC, `Lower Limit`, `Upper Limit`) %>%
+  select(Period, Model, Features, AUC, `Lower Limit`, `Upper Limit`) %>%
   arrange(Period, -AUC) %>%
   niceFormatting(caption = 'Readmission models comparison', label = 5)
 
 df %>%
   filter(Target == 'Death') %>%
-  select(Period, Model, AUC, `Lower Limit`, `Upper Limit`) %>%
+  select(Period, Model, Features, AUC, `Lower Limit`, `Upper Limit`) %>%
   arrange(Period, -AUC) %>%
   niceFormatting(caption = 'Death models comparison', label = 6)
 ```

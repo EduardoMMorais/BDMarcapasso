@@ -7,6 +7,9 @@ output:
 params:
   outcome_column: readmission_30d
   features_list: !r c()
+  k: 5
+  grid_size: 5
+  repeats: 2
 title: "`r paste('Model Selection -', params$outcome_column)`"
 ---
 
@@ -36,8 +39,9 @@ knitr::opts_chunk$set(
 # Global parameters
 
 ```{r}
-k = 5 # Number of folds for cross validation
-grid_size = 15 # Number of parameter combination to tune on each model
+k <- params$k # Number of folds for cross validation
+grid_size <- params$grid_size # Number of parameter combination to tune on each model
+repeats <- params$repeats
 ```
 
 # Imports
@@ -81,6 +85,20 @@ dir.create(file.path("./auxiliar/model_selection/performance/"),
 ```
 
 # Eligible features
+
+```{r}
+cat_features_list = readRDS(sprintf(
+  "./auxiliar/significant_columns/categorical_%s.rds",
+  outcome_column
+))
+
+num_features_list = readRDS(sprintf(
+  "./auxiliar/significant_columns/numerical_%s.rds",
+  outcome_column
+))
+
+features_list = c(cat_features_list, num_features_list)
+```
 
 ```{r}
 eligible_columns = df_names %>%
@@ -141,24 +159,24 @@ xgboost_recipe <-
   step_dummy(all_nominal_predictors())
 
 xgboost_spec <- boost_tree(
-  mtry = tune(),
   trees = tune(),
   min_n = tune(),
   tree_depth = tune(),
   learn_rate = tune(),
-  loss_reduction = tune()
+  loss_reduction = tune(),
+  sample_size = tune()
 ) %>%
   set_engine("xgboost",
              nthread = 8) %>%
   set_mode("classification")
 
 xgboost_grid <- grid_latin_hypercube(
-  finalize(mtry(), df_train),
-  trees(range = c(100L, 300L)),
+  trees(range = c(50L, 300L)),
   min_n(),
   tree_depth(),
-  learn_rate(),
+  learn_rate(range = c(0.01, 0.3), trans = NULL),
   loss_reduction(),
+  sample_prop(range = c(1/10, 1), trans = NULL),
   size = grid_size
 )
 
@@ -197,7 +215,7 @@ extract_vip(final_xgboost_fit, pred_wrapper = predict,
 
 xgboost_parameters <- xgboost_tune %>%
   show_best("roc_auc", n = 1) %>%
-  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
+  select(trees, min_n, tree_depth, learn_rate, loss_reduction) %>%
   as.list
 
 saveRDS(
@@ -207,6 +225,14 @@ saveRDS(
     outcome_column
   )
 )
+```
+
+```{r echo=F}
+preds <- predict(final_xgboost_fit, new_data = df_train, type = "prob") %>%
+  rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
+  .$`1`
+
+hist(preds)
 ```
 
 # Boosted Tree (LightGBM)
@@ -220,7 +246,6 @@ lightgbm_recipe <-
   step_dummy(all_nominal_predictors())
 
 lightgbm_spec <- boost_tree(
-  mtry = tune(),
   trees = tune(),
   min_n = tune(),
   tree_depth = tune(),
@@ -233,11 +258,10 @@ lightgbm_spec <- boost_tree(
   set_mode("classification")
 
 lightgbm_grid <- grid_latin_hypercube(
-  finalize(mtry(), df_train),
-  trees(range = c(100L, 300L)),
+  trees(range = c(50L, 300L)),
   min_n(),
   tree_depth(),
-  learn_rate(),
+  learn_rate(range = c(0.01, 0.3), trans = NULL),
   loss_reduction(),
   size = grid_size
 )
@@ -272,13 +296,13 @@ final_lightgbm_fit <- extract_workflow(last_lightgbm_fit)
 
 lightgbm_auc <- validation(final_lightgbm_fit, df_test)
 
-pfun_lightgbm <- function(object, newdata) predict(object, data = newdata)
-extract_vip(final_lightgbm_fit, pred_wrapper = pfun_lightgbm,
-            reference_class = "1")
+# pfun_lightgbm <- function(object, newdata) predict(object, data = newdata)
+# extract_vip(final_lightgbm_fit, pred_wrapper = pfun_lightgbm,
+#             reference_class = "1")
 
 lightgbm_parameters <- lightgbm_tune %>%
   show_best("roc_auc", n = 1) %>%
-  select(trees, mtry, min_n, tree_depth, learn_rate, loss_reduction) %>%
+  select(trees, min_n, tree_depth, learn_rate, loss_reduction) %>%
   as.list
 
 saveRDS(
@@ -289,6 +313,15 @@ saveRDS(
   )
 )
 ```
+
+```{r echo=F}
+preds <- predict(final_lightgbm_fit, new_data = df_train, type = "prob") %>%
+  rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
+  .$`1`
+
+hist(preds)
+```
+
 
 # GLM
 
@@ -382,19 +415,13 @@ final_tree_fit <- extract_workflow(last_tree_fit)
 
 tree_auc <- validation(final_tree_fit, df_test)
 
-if (tree_auc$auc > 0.55) {
-  final_tree_fit %>% 
-    extract_fit_parsnip() %>% 
-    vip() 
-}
-
 extract_vip(final_tree_fit, pred_wrapper = predict,
             reference_class = "0", use_matrix = FALSE,
             method = 'model')
 
-extract_vip(final_tree_fit, pred_wrapper = predict,
-            reference_class = "1", use_matrix = FALSE,
-            method = 'permute')
+# extract_vip(final_tree_fit, pred_wrapper = predict,
+#             reference_class = "1", use_matrix = FALSE,
+#             method = 'permute')
 ```
 
 # Random Forest
@@ -419,7 +446,7 @@ rf_spec <-
              probability = TRUE,
              nthread = 8) 
 
-rf_grid <- grid_latin_hypercube(mtry(range = c(1L, 20L)),
+rf_grid <- grid_latin_hypercube(mtry(range = c(1L, 50L)),
                                 trees(range = c(100L, 300L)),
                                 min_n(),
                                 size = grid_size)
@@ -463,9 +490,9 @@ extract_vip(final_rf_fit, pred_wrapper = predict,
             reference_class = "1", use_matrix = FALSE, 
             method = 'model')
 
-extract_vip(final_rf_fit, pred_wrapper = predict,
-            reference_class = "1", use_matrix = FALSE, 
-            method = 'permute')
+# extract_vip(final_rf_fit, pred_wrapper = predict,
+#             reference_class = "1", use_matrix = FALSE, 
+#             method = 'permute')
 ```
 
 # Models Comparison
