@@ -20,8 +20,8 @@ outcome_columns = setdiff(
 SHUTDOWN <- FALSE
 RUN_ALL <- FALSE
 
-START <- 6
-FINISH <- 6 #length(outcome_columns)
+START <- 1
+FINISH <- 1 #length(outcome_columns)
 
 total <- 4 + 5 * (FINISH - START + 1) + 1
 pb <- progress_bar$new(total = total)
@@ -108,26 +108,14 @@ for (outcome_column in outcome_columns[START:FINISH]) {
   # )
   
   pb$tick()
-
-  cat_features_list = readRDS(sprintf(
-    "./auxiliar/significant_columns/categorical_%s.rds",
-    outcome_column
-  ))
-
-  num_features_list = readRDS(sprintf(
-    "./auxiliar/significant_columns/numerical_%s.rds",
-    outcome_column
-  ))
-
-  features_list = c(cat_features_list, num_features_list)
-
+  
   rmarkdown::render(
     '6-model_selection.Rmd',
     params = list(outcome_column = outcome_column,
-                  features_list = features_list,
-                  k = 5,
-                  grid_size = 15,
-                  repeats = 2),
+                  k = 10,
+                  grid_size = 30,
+                  repeats = 2,
+                  RUN_ALL_MODELS = TRUE),
     output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
     clean = TRUE,
     quiet = TRUE
@@ -138,9 +126,8 @@ for (outcome_column in outcome_columns[START:FINISH]) {
   rmarkdown::render(
     '7-final_model.Rmd',
     params = list(outcome_column = outcome_column,
-                  features_list = features_list,
-                  k = 5,
-                  grid_size = 30,
+                  k = 10,
+                  grid_size = 50,
                   repeats = 2),
     output_file = paste0('./results/', outcome_column, '/7-final_model.pdf'),
     clean = TRUE,

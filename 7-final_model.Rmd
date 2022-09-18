@@ -6,7 +6,6 @@ output:
     template: latex-template.tex
 params:
   outcome_column: readmission_30d
-  features_list: !r c()
   k: 5
   grid_size: 10
   max_auc_loss: 0.01
@@ -38,11 +37,12 @@ knitr::opts_chunk$set(
 
 # Global parameters
 
-```{r}
+```{r warning=F, message=F}
 k <- params$k # Number of folds for cross validation
 grid_size <- params$grid_size # Number of parameter combination to tune on each model
 max_auc_loss <- params$max_auc_loss # Max accepted loss of AUC for reducing num of features
 repeats <- params$repeats
+Hmisc::list.tree(params)
 ```
 
 # Imports
@@ -135,11 +135,7 @@ eligible_features <- eligible_columns %>%
   base::intersect(c(columns_list$categorical_columns, columns_list$numerical_columns)) %>%
   setdiff(c(exception_columns, correlated_columns))
 
-if (is.null(features_list)) {
-  features = eligible_features
-} else {
-  features = base::intersect(eligible_features, features_list)
-}
+features = base::intersect(eligible_features, features_list)
 ```
 
 Starting features:
@@ -243,22 +239,6 @@ sprintf('Full Model CV Train AUC: %.3f' ,full_model$cv_auc)
 sprintf('Full Model Test AUC: %.3f' ,full_model$auc)
 ```
 
-```{r}
-# full_model$importance %>%
-#   filter(str_detect(Feature, 'education'))
-# 
-# full_model$importance %>%
-#   filter(str_detect(Feature, 'education')) %>%
-#   summarise(across(where(is.numeric), ~ sum(.x, na.rm = TRUE)))
-# 
-# full_model$importance %>%
-#   separate(Feature, c("Feature","value"), "__") %>%
-#   group_by(Feature) %>%
-#   summarise(Gain = sum(Gain), 
-#             Cover = sum(Cover), 
-#             Frequency = sum(Frequency))
-```
-
 Features with zero importance on the initial model:
 
 ```{r results='asis'}
@@ -306,10 +286,11 @@ if (full_model$cv_auc - trimmed_model$cv_auc < max_auc_loss) {
 }
 
 while (current_auc_loss < max_auc_loss & mean(current_features %in% whitelist) < 1) {
-  zero_importance_features <- setdiff(current_features, current_model$importance$Feature) %>%
+  zero_importance_features <-
+    setdiff(current_features, current_model$importance$Feature) %>%
     setdiff(whitelist)
   if (length(zero_importance_features) > 0) {
-    current_least_important <- zero_importance_features[1] 
+    current_least_important <- zero_importance_features[1]
   } else {
     current_least_important <-
       tail(setdiff(current_model$importance$Feature, whitelist), 1)
@@ -357,11 +338,7 @@ selection_results %>%
 
 
 ```{r}
-if (exists('last_feature_dropped')) {
-  selected_features <- c(current_features, last_feature_droped)
-} else {
-  selected_features <- current_features
-}
+selected_features <- current_features
 
 con <- file(sprintf('./auxiliar/final_model/selected_features/%s.yaml', outcome_column), "w")
 write_yaml(selected_features, con)
@@ -415,18 +392,17 @@ lightgbm_tuning <- function(recipe) {
     min_n = tune(),
     tree_depth = tune(),
     learn_rate = tune(),
-    # loss_reduction = tune(),
     sample_size = 1.0
   ) %>%
-    set_engine("lightgbm") %>%
+    set_engine("lightgbm",
+               nthread = 8) %>%
     set_mode("classification")
   
   lightgbm_grid <- grid_latin_hypercube(
-    trees(range = c(50L, 300L)),
-    min_n(),
-    tree_depth(),
-    learn_rate(range = c(0.01, 0.2), trans = NULL),
-    # loss_reduction(),
+    trees(range = c(25L, 150L)),
+    min_n(range = c(2L, 100L)),
+    tree_depth(range = c(5L, 15L)),
+    learn_rate(range = c(0.01, 0.1), trans = NULL),
     size = grid_size
   )
   
@@ -497,7 +473,7 @@ saveRDS(final_lightgbm_fit,
 
 # SHAP values
 
-```{r warning=T, message=T}
+```{r warning=T, message=T, fig.show="hold", out.width="50%", fig.height = 5}
 lightgbm_model <- parsnip::extract_fit_engine(final_lightgbm_fit)
 
 trained_rec <- prep(lightgbm_recipe, training = df_train)
@@ -508,14 +484,15 @@ df_test_baked <- bake(trained_rec, new_data = df_test)
 matrix_train <- as.matrix(df_train_baked %>% select(-all_of(outcome_column)))
 matrix_test <- as.matrix(df_test_baked %>% select(-all_of(outcome_column)))
 
-n_plots <- min(5, length(selected_features))
-
+n_plots <- min(6, length(selected_features))
+plotted <- 0
+  
 shap.plot.summary.wrap1(model = lightgbm_model, X = matrix_train,
                         top_n = n_plots, dilute = F)
 
 shap <- shap.prep(lightgbm_model, X_train = matrix_test)
 
-for (x in shap.importance(shap, names_only = TRUE)[1:n_plots]) {
+for (x in shap.importance(shap, names_only = TRUE)) {
   p <- shap.plot.dependence(
     shap,
     x = x,
@@ -525,7 +502,15 @@ for (x in shap.importance(shap, names_only = TRUE)[1:n_plots]) {
     alpha = 0.3
   ) +
     labs(title = x)
-  print(p)
+  
+  if (plotted < n_plots) {
+    print(p)
+    plotted <- plotted + 1
+  }
+  
+  ggsave(sprintf("./auxiliar/final_model/shap_plots/%s.png", x),
+         plot = p,
+         dpi = 300)
 }
 ```
 
