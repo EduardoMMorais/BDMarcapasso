@@ -402,7 +402,7 @@ lightgbm_tuning <- function(recipe) {
     trees(range = c(25L, 150L)),
     min_n(range = c(2L, 100L)),
     tree_depth(range = c(5L, 15L)),
-    learn_rate(range = c(0.01, 0.1), trans = NULL),
+    learn_rate(range = c(-3, -1), trans = log10_trans()),
     size = grid_size
   )
   
