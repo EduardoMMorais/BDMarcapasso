@@ -3,8 +3,6 @@ library(progress)
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
-# renv::activate()
-
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_columns = setdiff(
@@ -21,7 +19,7 @@ SHUTDOWN <- FALSE
 RUN_ALL <- FALSE
 
 START <- 1
-FINISH <- 1 #length(outcome_columns)
+FINISH <- 4 #length(outcome_columns)
 
 total <- 4 + 5 * (FINISH - START + 1) + 1
 pb <- progress_bar$new(total = total)
