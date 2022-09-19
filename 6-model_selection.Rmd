@@ -161,20 +161,16 @@ xgboost_spec <- boost_tree(
   min_n = tune(),
   tree_depth = tune(),
   learn_rate = tune(),
-  loss_reduction = tune(),
-  sample_size = tune()
 ) %>%
   set_engine("xgboost",
              nthread = 8) %>%
   set_mode("classification")
 
 xgboost_grid <- grid_latin_hypercube(
-  trees(range = c(50L, 200L)),
-  min_n(),
-  tree_depth(),
-  learn_rate(range = c(0.01, 0.3), trans = NULL),
-  loss_reduction(),
-  sample_prop(range = c(1/10, 1), trans = NULL),
+  trees(range = c(25L, 150L)),
+  min_n(range = c(2L, 100L)),
+  tree_depth(range = c(2L, 15L)),
+  learn_rate(range = c(-3, -1), trans = log10_trans()),
   size = grid_size
 )
 
@@ -255,7 +251,7 @@ lightgbm_spec <- boost_tree(
 lightgbm_grid <- grid_latin_hypercube(
   trees(range = c(25L, 150L)),
   min_n(range = c(2L, 100L)),
-  tree_depth(range = c(5L, 15L)),
+  tree_depth(range = c(2L, 15L)),
   learn_rate(range = c(-3, -1), trans = log10_trans()),
   size = grid_size
 )

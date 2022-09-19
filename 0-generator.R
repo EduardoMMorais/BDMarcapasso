@@ -15,11 +15,11 @@ outcome_columns = setdiff(
   )
 )
 
-SHUTDOWN <- FALSE
+SHUTDOWN <- TRUE
 RUN_ALL <- FALSE
 
 START <- 1
-FINISH <- 4 #length(outcome_columns)
+FINISH <- 3 #length(outcome_columns)
 
 total <- 4 + 5 * (FINISH - START + 1) + 1
 pb <- progress_bar$new(total = total)
@@ -97,13 +97,13 @@ for (outcome_column in outcome_columns[START:FINISH]) {
 
   pb$tick()
 
-  # rmarkdown::render(
-  #   '5-correlations.Rmd',
-  #   params = list(outcome_column = outcome_column),
-  #   output_file = paste0('./results/', outcome_column, '/5-correlations.pdf'),
-  #   clean = TRUE,
-  #   quiet = TRUE
-  # )
+  rmarkdown::render(
+    '5-correlations.Rmd',
+    params = list(outcome_column = outcome_column),
+    output_file = paste0('./results/', outcome_column, '/5-correlations.pdf'),
+    clean = TRUE,
+    quiet = TRUE
+  )
   
   pb$tick()
   
@@ -111,9 +111,9 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     '6-model_selection.Rmd',
     params = list(outcome_column = outcome_column,
                   k = 10,
-                  grid_size = 30,
+                  grid_size = 20,
                   repeats = 2,
-                  RUN_ALL_MODELS = TRUE),
+                  RUN_ALL_MODELS = FALSE),
     output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
     clean = TRUE,
     quiet = TRUE
