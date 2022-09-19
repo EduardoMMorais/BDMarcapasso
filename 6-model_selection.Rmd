@@ -5,11 +5,11 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: readmission_30d
+  outcome_column: readmission_1year
   k: 5
-  grid_size: 15
-  repeats: 2
-  RUN_ALL_MODELS: FALSE
+  grid_size: 10
+  repeats: 1
+  RUN_ALL_MODELS: TRUE
 title: "`r paste('Model Selection -', params$outcome_column)`"
 ---
 
@@ -60,6 +60,7 @@ library(caret)
 library(pROC)
 
 source("aux_functions.R")
+predict <- stats::predict
 ```
 
 # Loading data
