@@ -1,5 +1,10 @@
 - hospital_stay
 - admission_pre_t0_count
 - year_adm_t0
-- antiarritmico
+- meds_antimicrobianos
+- vasodilatador
+- icu_t0
 - procedure_type_new
+- nyha_basal
+- admission_pre_t0_180d
+- cied_final_1
