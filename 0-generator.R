@@ -15,11 +15,12 @@ outcome_columns = setdiff(
   )
 )
 
-SHUTDOWN <- TRUE
-RUN_ALL <- FALSE
+SHUTDOWN <- FALSE
+RUN_ALL <- TRUE
+RUN_ALL_MODELS <- TRUE
 
-START <- 1
-FINISH <- 3 #length(outcome_columns)
+START <- 6
+FINISH <- 6 #length(outcome_columns)
 
 total <- 4 + 5 * (FINISH - START + 1) + 1
 pb <- progress_bar$new(total = total)
@@ -113,7 +114,7 @@ for (outcome_column in outcome_columns[START:FINISH]) {
                   k = 10,
                   grid_size = 20,
                   repeats = 2,
-                  RUN_ALL_MODELS = FALSE),
+                  RUN_ALL_MODELS = TRUE),
     output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
     clean = TRUE,
     quiet = TRUE

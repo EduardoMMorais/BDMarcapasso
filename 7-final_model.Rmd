@@ -67,6 +67,7 @@ library(themis)
 source("aux_functions.R")
 
 select <- dplyr::select
+predict <- stats::predict
 ```
 
 # Loading data

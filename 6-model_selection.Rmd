@@ -210,7 +210,7 @@ extract_vip(final_xgboost_fit, pred_wrapper = predict,
 
 xgboost_parameters <- xgboost_tune %>%
   show_best("roc_auc", n = 1) %>%
-  select(trees, min_n, tree_depth, learn_rate, loss_reduction) %>%
+  select(trees, min_n, tree_depth, learn_rate) %>%
   as.list
 
 saveRDS(
