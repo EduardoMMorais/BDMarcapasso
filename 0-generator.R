@@ -15,9 +15,15 @@ outcome_columns = setdiff(
   )
 )
 
+
 SHUTDOWN <- FALSE
 RUN_ALL <- TRUE
 RUN_ALL_MODELS <- TRUE
+
+SHUTDOWN <- TRUE
+RUN_ALL <- FALSE
+RUN_ALL_MODELS <- FALSE
+
 
 START <- 6
 FINISH <- 6 #length(outcome_columns)
@@ -115,6 +121,7 @@ for (outcome_column in outcome_columns[START:FINISH]) {
                   grid_size = 20,
                   repeats = 2,
                   RUN_ALL_MODELS = TRUE),
+                  RUN_ALL_MODELS = RUN_ALL_MODELS,
     output_file = paste0('./results/', outcome_column, '/6-model_selection.pdf'),
     clean = TRUE,
     quiet = TRUE

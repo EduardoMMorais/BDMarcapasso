@@ -211,15 +211,16 @@ extract_vip(final_xgboost_fit, pred_wrapper = predict,
 xgboost_parameters <- xgboost_tune %>%
   show_best("roc_auc", n = 1) %>%
   select(trees, min_n, tree_depth, learn_rate) %>%
+  select(-.metric, -.estimator, -.config, -mean, -n, -std_err) %>%
   as.list
 
-saveRDS(
-  xgboost_parameters,
-  file = sprintf(
-    "./auxiliar/model_selection/hyperparameters/xgboost_%s.rds",
-    outcome_column
-  )
-)
+# saveRDS(
+#   xgboost_parameters,
+#   file = sprintf(
+#     "./auxiliar/model_selection/hyperparameters/xgboost_%s.rds",
+#     outcome_column
+#   )
+# )
 
 preds <- predict(final_xgboost_fit, new_data = df_train, type = "prob") %>%
   rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
