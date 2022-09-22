@@ -210,12 +210,6 @@ df_chisq %>%
 ```{r}
 dir.create(file.path("./auxiliar/significant_columns/"), showWarnings = FALSE)
 
-saveRDS(significant_cat_cols,
-        file = sprintf("./auxiliar/significant_columns/categorical_%s.rds", outcome_column))
-
-saveRDS(significant_num_cols,
-        file = sprintf("./auxiliar/significant_columns/numerical_%s.rds", outcome_column))
-
 con <- file(sprintf("./auxiliar/significant_columns/categorical_%s.yaml", outcome_column), "w")
 write_yaml(significant_cat_cols, con)
 close(con)

@@ -5,11 +5,11 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: readmission_1year
-  k: 5
-  grid_size: 10
+  outcome_column: readmission_30d
+  k: 2
+  grid_size: 2
   repeats: 1
-  RUN_ALL_MODELS: TRUE
+  RUN_ALL_MODELS: FALSE
 title: "`r paste('Model Selection -', params$outcome_column)`"
 ---
 
@@ -90,13 +90,13 @@ dir.create(file.path("./auxiliar/model_selection/performance/"),
 # Eligible features
 
 ```{r}
-cat_features_list = readRDS(sprintf(
-  "./auxiliar/significant_columns/categorical_%s.rds",
+cat_features_list = read_yaml(sprintf(
+  "./auxiliar/significant_columns/categorical_%s.yaml",
   outcome_column
 ))
 
-num_features_list = readRDS(sprintf(
-  "./auxiliar/significant_columns/numerical_%s.rds",
+num_features_list = read_yaml(sprintf(
+  "./auxiliar/significant_columns/numerical_%s.yaml",
   outcome_column
 ))
 
@@ -212,20 +212,6 @@ xgboost_parameters <- xgboost_tune %>%
   show_best("roc_auc", n = 1) %>%
   select(-.metric, -.estimator, -.config, -mean, -n, -std_err) %>%
   as.list
-
-# saveRDS(
-#   xgboost_parameters,
-#   file = sprintf(
-#     "./auxiliar/model_selection/hyperparameters/xgboost_%s.rds",
-#     outcome_column
-#   )
-# )
-
-preds <- predict(final_xgboost_fit, new_data = df_train, type = "prob") %>%
-  rename_at(vars(starts_with(".pred_")), ~ str_remove(., ".pred_")) %>%
-  .$`1`
-
-hist(preds)
 ```
 
 # Boosted Tree (LightGBM)
@@ -294,13 +280,10 @@ lightgbm_parameters <- lightgbm_tune %>%
 
 Hmisc::list.tree(lightgbm_parameters)
 
-saveRDS(
-  lightgbm_parameters,
-  file = sprintf(
-    "./auxiliar/model_selection/hyperparameters/lightgbm_%s.rds",
-    outcome_column
-  )
-)
+con <- file(sprintf('./auxiliar/model_selection/hyperparameters/%s.yaml', outcome_column), "w")
+write_yaml(lightgbm_parameters, con)
+close(con)
+
 ```
 
 ```{r echo=F}
@@ -510,6 +493,5 @@ df_auc %>%
     geom_point() + 
     geom_errorbar()
 
-saveRDS(df_auc, sprintf("./auxiliar/model_selection/performance/%s.RData", outcome_column))
+write_csv(df_auc, sprintf("./auxiliar/model_selection/performance/%s.csv", outcome_column))
 ```
-

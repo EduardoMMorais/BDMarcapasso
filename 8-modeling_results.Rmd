@@ -29,7 +29,8 @@ path <- "./auxiliar/model_selection/performance"
 df <- tibble()
 
 for (file in list.files(path)) {
-  df <- df %>% bind_rows(readRDS(file.path(path, file)))
+  df <- df %>% bind_rows(read_csv(file.path(path, file),
+                                  show_col_types = FALSE))
 }
 
 df <- df %>%
@@ -93,7 +94,8 @@ path <- "./auxiliar/final_model/performance"
 df <- tibble()
 
 for (file in list.files(path)) {
-  df <- df %>% bind_rows(readRDS(file.path(path, file)))
+  df <- df %>% bind_rows(read_csv(file.path(path, file),
+                                  show_col_types = FALSE))
 }
 
 df <- df %>%
