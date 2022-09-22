@@ -16,11 +16,11 @@ outcome_columns = setdiff(
 )
 
 SHUTDOWN <- TRUE
-RUN_ALL <- FALSE
-RUN_ALL_MODELS <- FALSE
+RUN_ALL <- TRUE
+RUN_ALL_MODELS <- TRUE
 
 START <- 1
-FINISH <- 3 #length(outcome_columns)
+FINISH <- length(outcome_columns)
 
 total <- 4 + 5 * (FINISH - START + 1) + 1
 pb <- progress_bar$new(total = total)
@@ -78,23 +78,23 @@ for (outcome_column in outcome_columns[START:FINISH]) {
   dir.create(file.path(paste0('./results/', outcome_column)),
              showWarnings = FALSE)
 
-  # rmarkdown::render(
-  #   '3-tables.Rmd',
-  #   params = list(outcome_column = outcome_column),
-  #   output_file = paste0('./results/', outcome_column, '/3-tables.pdf'),
-  #   clean = TRUE,
-  #   quiet = TRUE
-  # )
+  rmarkdown::render(
+    '3-tables.Rmd',
+    params = list(outcome_column = outcome_column),
+    output_file = paste0('./results/', outcome_column, '/3-tables.pdf'),
+    clean = TRUE,
+    quiet = TRUE
+  )
 
   pb$tick()
 
-  # rmarkdown::render(
-  #   '4-plots.Rmd',
-  #   params = list(outcome_column = outcome_column),
-  #   output_file = paste0('./results/', outcome_column, '/4-plots.pdf'),
-  #   clean = TRUE,
-  #   quiet = TRUE
-  # )
+  rmarkdown::render(
+    '4-plots.Rmd',
+    params = list(outcome_column = outcome_column),
+    output_file = paste0('./results/', outcome_column, '/4-plots.pdf'),
+    clean = TRUE,
+    quiet = TRUE
+  )
 
   pb$tick()
 

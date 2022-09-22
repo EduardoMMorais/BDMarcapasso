@@ -67,6 +67,7 @@ library(themis)
 source("aux_functions.R")
 
 select <- dplyr::select
+predict <- stats::predict
 ```
 
 # Loading data
@@ -508,9 +509,9 @@ for (x in shap.importance(shap, names_only = TRUE)) {
     plotted <- plotted + 1
   }
   
-  ggsave(sprintf("./auxiliar/final_model/shap_plots/%s.png", x),
-         plot = p,
-         dpi = 300)
+  # ggsave(sprintf("./auxiliar/final_model/shap_plots/%s/%s.png", outcome_column, x),
+  #        plot = p,
+  #        dpi = 300)
 }
 ```
 

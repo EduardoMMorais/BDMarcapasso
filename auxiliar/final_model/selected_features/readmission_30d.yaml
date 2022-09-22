@@ -1,7 +1,11 @@
 - hospital_stay
 - admission_pre_t0_count
-- antiarritmico
 - digoxina
+- meds_antimicrobianos
 - bic
 - icu_t0
+- antiarritmico
+- anticonvulsivante
+- comorbidities_count
 - procedure_type_new
+- prior_mi
