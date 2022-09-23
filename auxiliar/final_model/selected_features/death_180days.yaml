@@ -3,14 +3,7 @@
 - year_adm_t0
 - espironolactona
 - education_level
+- laboratorio
 - comorbidities_count
 - admission_pre_t0_count
-- nyha_basal
-- icu_t0
-- antiarritmico
-- interconsulta
-- meds_antimicrobianos
-- cintilografia
-- exames_imagem_qtde
-- endoscopia
-- diabetes
+- vasodilatador

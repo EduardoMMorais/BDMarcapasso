@@ -3,6 +3,30 @@ library(progress)
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
+# PARAMETERS --------------------
+
+SHUTDOWN <- TRUE
+RUN_ALL <- TRUE
+RUN_ALL_MODELS <- TRUE
+
+START <- 3
+FINISH <- 9
+
+#--------------------------------
+
+total <- 4 + 5 * (FINISH - START + 1) + 1
+
+pb <- progress_bar$new(total = total)
+pb$tick(0) 
+
+rmarkdown::render(
+  '1-processing.Rmd',
+  output_file = './results/1-processing.pdf',
+  clean = TRUE,
+  quiet = TRUE
+)
+pb$tick()
+
 columns_list <- yaml.load_file("./auxiliar/columns_list.yaml")
 
 outcome_columns = setdiff(
@@ -15,25 +39,7 @@ outcome_columns = setdiff(
   )
 )
 
-SHUTDOWN <- TRUE
-RUN_ALL <- TRUE
-RUN_ALL_MODELS <- TRUE
-
-START <- 1
-FINISH <- length(outcome_columns)
-
-total <- 4 + 5 * (FINISH - START + 1) + 1
-pb <- progress_bar$new(total = total)
-pb$tick(0)
 if (RUN_ALL) {
-  rmarkdown::render(
-    '1-processing.Rmd',
-    output_file = './results/1-processing.pdf',
-    clean = TRUE,
-    quiet = TRUE
-  )
-  
-  pb$tick()
   
   rmarkdown::render(
     '2-distribution_shift.Rmd',
@@ -41,7 +47,6 @@ if (RUN_ALL) {
     clean = TRUE,
     quiet = TRUE
   )
-  
   pb$tick()
   
   dir.create(file.path(paste0('./results/', 'split')),
@@ -54,7 +59,6 @@ if (RUN_ALL) {
     clean = TRUE,
     quiet = TRUE
   )
-  
   pb$tick()
   
   rmarkdown::render(
@@ -64,7 +68,6 @@ if (RUN_ALL) {
     clean = TRUE,
     quiet = TRUE
   )
-  
   pb$tick()
 } else {
   pb$tick()
@@ -85,7 +88,6 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     clean = TRUE,
     quiet = TRUE
   )
-
   pb$tick()
 
   rmarkdown::render(
@@ -95,7 +97,6 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     clean = TRUE,
     quiet = TRUE
   )
-
   pb$tick()
 
   rmarkdown::render(
@@ -105,7 +106,6 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     clean = TRUE,
     quiet = TRUE
   )
-  
   pb$tick()
   
   rmarkdown::render(
@@ -119,7 +119,6 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     clean = TRUE,
     quiet = TRUE
   )
-
   pb$tick()
 
   rmarkdown::render(
@@ -132,10 +131,8 @@ for (outcome_column in outcome_columns[START:FINISH]) {
     clean = TRUE,
     quiet = TRUE
   )
-  
   pb$tick()
 }
-
 
 rmarkdown::render(
   '8-modeling_results.Rmd',
@@ -143,7 +140,6 @@ rmarkdown::render(
   clean = TRUE,
   quiet = TRUE
 )
-
 pb$tick()
 
 if (SHUTDOWN) system('shutdown -s')
