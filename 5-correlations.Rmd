@@ -5,7 +5,7 @@ output:
   pdf_document:
     template: latex-template.tex
 params:
-  outcome_column: death_3year
+  outcome_column: readmission_30d
   threshold: 0.1
 title: "`r paste('Correlations -', params$outcome_column)`"
 ---
@@ -207,40 +207,8 @@ df_chisq %>%
   niceFormatting(caption = "Chi-squared test", label = 6)
 ```
 
-```{r echo=F, eval=F}
-variable = 'sex'
-outcome_column = 'readmission_30d'
-chisq.test(df[[outcome_column]], 
-           df[[variable]] %>% replace_na('NA'), # counting NA as cat
-           simulate.p.value = TRUE)
-
-variable = 'sex'
-outcome_column = 'readmission_60d'
-chisq.test(df[[outcome_column]], 
-           df[[variable]] %>% replace_na('NA'), # counting NA as cat
-           simulate.p.value = TRUE)
-
-variable = 'sex'
-outcome_column = 'readmission_180d'
-chisq.test(df[[outcome_column]], 
-           df[[variable]] %>% replace_na('NA'), # counting NA as cat
-           simulate.p.value = TRUE)
-
-variable = 'sex'
-outcome_column = 'readmission_1year'
-chisq.test(df[[outcome_column]], 
-           df[[variable]] %>% replace_na('NA'), # counting NA as cat
-           simulate.p.value = TRUE)
-```
-
 ```{r}
 dir.create(file.path("./auxiliar/significant_columns/"), showWarnings = FALSE)
-
-saveRDS(significant_cat_cols,
-        file = sprintf("./auxiliar/significant_columns/categorical_%s.rds", outcome_column))
-
-saveRDS(significant_num_cols,
-        file = sprintf("./auxiliar/significant_columns/numerical_%s.rds", outcome_column))
 
 con <- file(sprintf("./auxiliar/significant_columns/categorical_%s.yaml", outcome_column), "w")
 write_yaml(significant_cat_cols, con)
