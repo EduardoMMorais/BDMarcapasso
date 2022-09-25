@@ -1,13 +1,13 @@
-# Execute com "R -s -f gerador.R"
+#!/usr/bin/Rscript --vanilla
 library(yaml)
 
 load('../dataset/processed_dictionary.RData') 
-columns_list <- yaml.load_file("../auxiliar/final_model/selected_features/readmission_30d.yaml")
+columns_list <- yaml.load_file("backend/column_list_readmission_30d.yaml")
 output <- ""
 for (column in columns_list) {
   dic_entry <- df_names[which(df_names['variable.name']==column),]
   if (grepl('\\|',dic_entry['options..definition'])) {
-    cat(sprintf('<div class="mb-3"><label for="%s" class="form-label">%s</label><select class="form-select"><option selected></option>',dic_entry['variable.name'],dic_entry['field.label']), sep="")
+    cat(sprintf('<div class="mb-3"><label for="%s" class="form-label">%s</label><select class="form-select" name="%s" id="%s"><option selected></option>',dic_entry['variable.name'],dic_entry['field.label'],dic_entry['variable.name'],dic_entry['variable.name']), sep="")
     options <- unlist(strsplit(as.character(dic_entry['options..definition']), '|', fixed=TRUE))
     for (option in options) {
       pair <- unlist(strsplit(option, ',', fixed=TRUE))
