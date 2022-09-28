@@ -15,6 +15,6 @@ for (column in columns_list) {
     }
     cat("</select></div>", sep="\n")
   } else {
-    cat(sprintf('<div class="mb-3"><label for="%s" class="form-label">%s</label><input type="number" class="form-control" id="%s" name="%s" value="0"></div>',dic_entry['variable.name'],dic_entry['field.label'],dic_entry['variable.name'],dic_entry['variable.name']), sep="\n")
+    cat(sprintf('<div class="mb-3"><label for="%s" class="form-label">%s</label><input type="number" class="form-control" id="%s" name="%s" value="0" min="0"></div>',dic_entry['variable.name'],dic_entry['field.label'],dic_entry['variable.name'],dic_entry['variable.name']), sep="\n")
   }
 }

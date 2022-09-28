@@ -1,7 +1,7 @@
-#!/usr/bin/Rscript --vanilla
+#!/usr/bin/Rscript
 
 library(Rook)
-# Esta aplicação não roda no RStudio. Veja https://github.com/jeffreyhorner/Rook/pull/31/files para detalhes
+# This script does not run in RStudio. See https://github.com/jeffreyhorner/Rook/pull/31/files for details
 s <- Rhttpd$new()
 s$add(
   app='./app.R',

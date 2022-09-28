@@ -3,7 +3,7 @@ document.getElementById('btngo').onclick = function() {
         spinner = document.getElementById('spinner'),
         resultados = document.getElementById('resultados');
     spinner.style.display = 'block';
-    fetch('http://127.0.0.1:8081/custom/marcapasso', {
+    fetch('marcapasso', {
         'method': 'POST',
         'headers': {
             "Content-Type": "application/x-www-form-urlencoded",
