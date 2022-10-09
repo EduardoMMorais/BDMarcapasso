@@ -2,10 +2,10 @@
 # It can also be used as a guide to build an VM or bare metal installation
 # Some commands:
 # - Generate the container image:
-#  docker image build -t marcapassoml:0.0.9 .
+#  docker image build -t marcapassoml:0.0.10 .
 # - Create the container:
-#  docker load -i marcapassoml-0.0.9.tar.gz
-#  docker container create -p 80:80 --name calculadora marcapassoml:0.0.9
+#  docker load -i marcapassoml-0.0.10.tar.gz
+#  docker container create -p 80:80 --name calculadora marcapassoml:0.0.10
 # - Launch the container:
 #  docker container start calculadora
 # - Stop the container
