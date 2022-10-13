@@ -2,10 +2,10 @@
 # It can also be used as a guide to build an VM or bare metal installation
 # Some commands:
 # - Generate the container image:
-#  docker image build -t marcapassoml:0.0.10 .
+#  docker image build -t marcapassoml:0.0.11 .
 # - Create the container:
-#  docker load -i marcapassoml-0.0.10.tar.gz
-#  docker container create -p 80:80 --name calculadora marcapassoml:0.0.10
+#  docker load -i marcapassoml-0.0.11.tar.gz
+#  docker container create -p 80:80 --name calculadora marcapassoml:0.0.11
 # - Launch the container:
 #  docker container start calculadora
 # - Stop the container
@@ -38,6 +38,8 @@ RUN apt-get update && apt-get install -y nginx-core \
 COPY frontend /usr/share/nginx/html/
 # NGINX configuration file. Needs to enable SSI (Server-side Includes) and reverse proxy the "/marcapasso" path
 COPY dockerfiles/default.conf /etc/nginx/conf.d/default.conf
+# We should leave only one server configuration, so we won't have problems with diferent hostnames
+RUN rm /etc/nginx/sites-enabled/default
 # Copy the launcher. On bare metal it is better to create systemd entries or similar
 COPY dockerfiles/launcher.sh /home/calculator/launcher.sh
 
