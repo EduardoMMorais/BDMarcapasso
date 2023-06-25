@@ -10,7 +10,8 @@ output:
 ```{r, include=FALSE}
 knitr::opts_chunk$set(
   warning = F,
-  message = F
+  message = F,
+  echo = F
 )
 ```
 
@@ -58,12 +59,14 @@ df <- df %>%
              '2 years',
              '3 years'
            )
-         ))
+         )) %>% 
+  rename(AUROC = AUC)
 
-df %>%
+p_readmission <- df %>%
+  filter(Target == 'Readmission') %>% 
   ggplot(aes(
     x = Period,
-    y = AUC,
+    y = AUROC,
     ymin = `Lower Limit`,
     ymax = `Upper Limit`,
     color = Model
@@ -71,18 +74,50 @@ df %>%
   facet_grid(~Target, scales = "free") + 
   geom_point(position = position_dodge(width = 0.9)) +
   geom_errorbar(position = position_dodge(width = 0.9)) +
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom") +
+  theme_minimal() + 
+  scale_color_manual(values = c("#24527d", "#5cb0de", "#82c7d4", "#94294d", "#e07057"))
+p_readmission
 
+ggsave("./auxiliar/final_model/auroc_plots/readmission_all_models.png",
+       plot = p_readmission,
+       dpi = 300)
+```
+
+```{r}
+p_death <- df %>%
+  filter(Target == 'Death') %>% 
+  ggplot(aes(
+    x = Period,
+    y = AUROC,
+    ymin = `Lower Limit`,
+    ymax = `Upper Limit`,
+    color = Model
+  )) +
+  facet_grid(~Target, scales = "free") + 
+  geom_point(position = position_dodge(width = 0.9)) +
+  geom_errorbar(position = position_dodge(width = 0.9)) +
+  theme(legend.position = "bottom") +
+  theme_minimal() + 
+  scale_color_manual(values = c("#24527d", "#5cb0de", "#82c7d4", "#94294d", "#e07057"))
+p_death
+
+ggsave("./auxiliar/final_model/auroc_plots/death_all_models.png",
+       plot = p_death,
+       dpi = 300)
+```
+
+```{r}
 df %>%
   filter(Target == 'Readmission') %>%
-  select(Period, Model, AUC, `Lower Limit`, `Upper Limit`) %>%
-  arrange(Period, -AUC) %>%
+  select(Period, Model, AUROC, `Lower Limit`, `Upper Limit`) %>%
+  arrange(Period, -AUROC) %>%
   niceFormatting(caption = 'Readmission models comparison', label = 1)
 
 df %>%
   filter(Target == 'Death') %>%
-  select(Period, Model, AUC, `Lower Limit`, `Upper Limit`) %>%
-  arrange(Period, -AUC) %>%
+  select(Period, Model, AUROC, `Lower Limit`, `Upper Limit`) %>%
+  arrange(Period, -AUROC) %>%
   niceFormatting(caption = 'Death models comparison', label = 2)
 ```
 
@@ -135,12 +170,14 @@ df <- df %>%
       )
     )
   ) %>%
-  filter(Model != 'Trimmed Model')
+  filter(Model != 'Trimmed Model') %>% 
+  rename(AUROC = AUC)
 
-df %>%
+p_readmission <- df %>%
+  filter(Target == 'Readmission') %>%
   ggplot(aes(
     x = Period,
-    y = AUC,
+    y = AUROC,
     ymin = `Lower Limit`,
     ymax = `Upper Limit`,
     color = Model
@@ -148,18 +185,50 @@ df %>%
   facet_grid(~Target, scales = "free") + 
   geom_point(position = position_dodge(width = 0.9)) +
   geom_errorbar(position = position_dodge(width = 0.9)) +
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom") +
+  theme_minimal() + 
+  scale_color_manual(values = c("#24527d", "#94294d", "#e07057"))
+p_readmission
 
+ggsave("./auxiliar/final_model/auroc_plots/final_readmission_steps.png",
+       plot = p_readmission,
+       dpi = 300)
+```
+
+```{r}
+p_death <- df %>%
+  filter(Target == 'Death') %>%
+  ggplot(aes(
+    x = Period,
+    y = AUROC,
+    ymin = `Lower Limit`,
+    ymax = `Upper Limit`,
+    color = Model
+  )) +
+  facet_grid(~Target, scales = "free") + 
+  geom_point(position = position_dodge(width = 0.9)) +
+  geom_errorbar(position = position_dodge(width = 0.9)) +
+  theme(legend.position = "bottom") +
+  theme_minimal() + 
+  scale_color_manual(values = c("#24527d", "#94294d", "#e07057"))
+p_death
+
+ggsave("./auxiliar/final_model/auroc_plots/final_death_steps.png",
+       plot = p_death,
+       dpi = 300)
+```
+
+```{r}
 df %>%
   filter(Target == 'Readmission') %>%
-  select(Period, Model, Features, AUC, `Lower Limit`, `Upper Limit`) %>%
-  arrange(Period, -AUC) %>%
+  select(Period, Model, Features, AUROC, `Lower Limit`, `Upper Limit`) %>%
+  arrange(Period, -AUROC) %>%
   niceFormatting(caption = 'Readmission models comparison', label = 5)
 
 df %>%
   filter(Target == 'Death') %>%
-  select(Period, Model, Features, AUC, `Lower Limit`, `Upper Limit`) %>%
-  arrange(Period, -AUC) %>%
+  select(Period, Model, Features, AUROC, `Lower Limit`, `Upper Limit`) %>%
+  arrange(Period, -AUROC) %>%
   niceFormatting(caption = 'Death models comparison', label = 6)
 ```
 
@@ -168,19 +237,32 @@ df %>%
 ```{r results = 'asis', echo = F}
 library(yaml)
 library(gluedown)
+library(tools)
+library(writexl)
+
+df_names <- readRDS("dataset/processed_dictionary.rds")
+complete_features <- df_names %>%
+  filter(momento.aquisicao == 'Admissão t0') %>%
+  .$variable.name
+
 path <- "./auxiliar/final_model/selected_features"
 
 all_features <- c()
+df_features <- tibble(features = complete_features)
 
-for (file in list.files(path)) {
-  features <- read_yaml(file.path(path, file))
-  sprintf('## %s\n', tools::file_path_sans_ext(file)) %>% cat
-  md_order(features, seq = TRUE, pad = TRUE) %>% print
+for (file in setdiff(list.files(path), "selected_features.xlsx")) {
+  features_vec <- read_yaml(file.path(path, file))
+  outcome <- file_path_sans_ext(file)
+  sprintf('## %s\n', outcome) %>% cat
+  md_order(features_vec, seq = TRUE, pad = TRUE) %>% print
   cat('\n')
   
-  all_features <- c(all_features, features)
+  all_features <- c(all_features, features_vec)
+  df_features[outcome] = ifelse(df_features$features %in% features_vec, 'X', '')
 }
 
 cat('# Union\n')
 md_order(all_features %>% unique(), seq = TRUE, pad = TRUE) %>% print
+
+write_xlsx(df_features, path = file.path(path, "selected_features.xlsx"))
 ```

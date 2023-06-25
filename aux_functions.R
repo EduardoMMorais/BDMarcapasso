@@ -7,6 +7,29 @@ niceFormatting = function(df, caption="", digits = 2, font_size = NULL, label = 
                   latex_options = c("striped", "HOLD_position", "repeat_header"))
 }
 
+roc_with_ci <- function(obj) {
+  ciobj <- ci.se(obj, specificities = seq(0, 1, l = 25))
+  dat.ci <- data.frame(x = as.numeric(rownames(ciobj)),
+                       lower = ciobj[, 1],
+                       upper = ciobj[, 3])
+  
+  ggroc(obj) +
+    theme_minimal() +
+    geom_abline(
+      slope = 1,
+      intercept = 1,
+      linetype = "dashed",
+      alpha = 0.7,
+      color = "grey"
+    ) + coord_equal() +
+    geom_ribbon(
+      data = dat.ci,
+      aes(x = x, ymin = lower, ymax = upper),
+      fill = "steelblue",
+      alpha = 0.2
+    ) + ggtitle(capture.output(obj$ci)) 
+} 
+
 validation = function(model_fit, new_data, plot=TRUE) {
   test_predictions_prob <-
     predict(model_fit, new_data = new_data, type = "prob") %>%
@@ -22,7 +45,7 @@ validation = function(model_fit, new_data, plot=TRUE) {
     ci = TRUE,
     ci.alpha = 0.9,
     stratified = FALSE,
-    plot = plot,
+    plot = FALSE,
     auc.polygon = TRUE,
     max.auc.polygon = TRUE,
     grid = TRUE,
@@ -53,9 +76,13 @@ validation = function(model_fit, new_data, plot=TRUE) {
                        reference = new_data[[outcome_column]])
   
   if (plot) {
-    sens.ci <- ci.se(pROC_obj)
-    plot(sens.ci, type = "shape", col = "lightblue", print.thres = "best")
-    plot(sens.ci, type = "bars")
+    p <- roc_with_ci(pROC_obj)
+    print(p)
+    
+    ggsave(sprintf("./auxiliar/final_model/auroc_plots/%s.png",
+                   outcome_column),
+           plot = p,
+           dpi = 300)
     
     print(sprintf("Optimal Threshold: %.2f", proc_coords$threshold))
     caret::confusionMatrix(conf_matrix) %>% print
@@ -94,4 +121,8 @@ extract_vip <- function(fit_tidymodels, pred_wrapper = predict,
   } else {
     vi_model(fit_parsnip) %>% vip
   }
+}
+
+medianWithoutNA <- function(x) {
+  median(x[which(!is.na(x))])
 }

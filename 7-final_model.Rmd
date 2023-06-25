@@ -455,7 +455,8 @@ standard_results <- lightgbm_tuning(lightgbm_recipe)
 final_lightgbm_fit <- standard_results$fit
 lightgbm_parameters <- standard_results$parameters
 
-con <- file(sprintf('./auxiliar/final_model/hyperparameters/%s.yaml', outcome_column), "w")
+con <- file(sprintf('./auxiliar/final_model/hyperparameters/%s.yaml',
+                    outcome_column), "w")
 write_yaml(lightgbm_parameters, con)
 close(con)
 
@@ -505,9 +506,10 @@ for (x in shap.importance(shap, names_only = TRUE)) {
     plotted <- plotted + 1
   }
 
-  # ggsave(sprintf("./auxiliar/final_model/shap_plots/%s/%s.png", outcome_column, x),
-  #        plot = p,
-  #        dpi = 300)
+  ggsave(sprintf("./auxiliar/final_model/shap_plots/%s/%s.png",
+                 outcome_column, x),
+         plot = p,
+         dpi = 300)
 }
 ```
 
