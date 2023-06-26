@@ -9,7 +9,7 @@ params:
   k: 2
   grid_size: 2
   repeats: 1
-  RUN_ALL_MODELS: FALSE
+  RUN_ALL_MODELS: TRUE
 title: "`r paste('Model Selection -', params$outcome_column)`"
 ---
 
@@ -310,7 +310,7 @@ glmnet_recipe <-
 glmnet_spec <- 
   logistic_reg(penalty = 0) %>% 
   set_mode("classification") %>% 
-  set_engine("glmnet") 
+  set_engine("glm") 
 
 glmnet_workflow <- 
   workflow() %>% 

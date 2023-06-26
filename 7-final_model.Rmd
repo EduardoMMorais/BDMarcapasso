@@ -97,6 +97,14 @@ dir.create(file.path("./auxiliar/final_model/performance/"),
 dir.create(file.path("./auxiliar/final_model/selected_features/"),
            showWarnings = FALSE,
            recursive = TRUE)
+
+dir.create(file.path("./auxiliar/final_model/auroc_plots/"),
+           showWarnings = FALSE,
+           recursive = TRUE)
+
+dir.create(file.path("./auxiliar/final_model/shap_plots/"),
+           showWarnings = FALSE,
+           recursive = TRUE)
 ```
 
 # Eligible features
