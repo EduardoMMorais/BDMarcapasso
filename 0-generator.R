@@ -5,11 +5,11 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # PARAMETERS --------------------
 
-SHUTDOWN <- TRUE
+SHUTDOWN <- FALSE
 RUN_ALL <- TRUE
 RUN_ALL_MODELS <- TRUE
 
-START <- 3
+START <- 7
 FINISH <- 9
 
 #--------------------------------
@@ -70,7 +70,6 @@ if (RUN_ALL) {
   )
   pb$tick()
 } else {
-  pb$tick()
   pb$tick()
   pb$tick()
   pb$tick()
