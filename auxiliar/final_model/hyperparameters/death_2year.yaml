@@ -1,4 +1,4 @@
-trees: 95
-min_n: 58
-tree_depth: 4
-learn_rate: 0.0736173
+trees: 145
+min_n: 69
+tree_depth: 3
+learn_rate: 0.0477369
