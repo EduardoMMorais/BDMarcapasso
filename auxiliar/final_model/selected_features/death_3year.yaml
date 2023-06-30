@@ -1,0 +1,13 @@
+- hospital_stay
+- age
+- year_adm_t0
+- admission_pre_t0_count
+- espironolactona
+- education_level
+- comorbidities_count
+- ieca_bra
+- meds_cardiovasc_qtde
+- nyha_basal
+- antiarritmico
+- cied_final_group_1
+- ventilacao_mecanica
